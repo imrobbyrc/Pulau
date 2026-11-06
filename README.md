@@ -11,6 +11,10 @@ open dist/Pulau.app
 
 Start **Start notifications** from the menu-bar menu. Use **Test banner (visual only)** to check banner rendering without granting notification access. Pulau only observes notifications delivered after it starts; it does not keep history or dismiss Notification Center entries.
 
+## GLM usage
+
+Set a GLM API key from the Agent Usage menu to see your five-hour and weekly remaining limits. The key is stored in macOS Keychain and sent to Z.ai. GLM provider adapted from OpenUsage (MIT) by Robin Ebers.
+
 ## Permission and privacy
 
 macOS has no public API for observing notifications from other apps. Pulau reads the private `usernoted` SQLite database in read-only mode, so macOS updates may break capture. It requires **Full Disk Access**:
