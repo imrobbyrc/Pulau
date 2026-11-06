@@ -15,6 +15,10 @@ Start **Start notifications** from the menu-bar menu. Use **Test banner (visual 
 
 Set a GLM API key from the Agent Usage menu to see your five-hour and weekly remaining limits. The key is stored in macOS Keychain and sent to Z.ai. GLM provider adapted from OpenUsage (MIT) by Robin Ebers.
 
+## Codex usage
+
+Sign in to Codex from the menu to see your five-hour remaining limit in the island. Use the menu to refresh or sign out. Codex provider adapted from [OpenUsage](https://github.com/robinebers/OpenUsage) (MIT) by Robin Ebers. The provider marks are original, brand-inspired graphics, not official logos.
+
 ## Permission and privacy
 
 macOS has no public API for observing notifications from other apps. Pulau reads the private `usernoted` SQLite database in read-only mode, so macOS updates may break capture. It requires **Full Disk Access**:
