@@ -290,12 +290,15 @@ struct IslandBannerView: View {
             } else {
                 IslandGlass().clipShape(shape)
             }
-            // Three-stage depth, glass-forward: solid -> less -> liquid.
+            // Three-stage depth, glass-forward. The top band stays fully
+            // solid through the real notch height so the island reads as one
+            // with the hardware notch; glass takes over below it.
             shape.fill(LinearGradient(
                 stops: [
                     .init(color: .black, location: 0),
-                    .init(color: .black.opacity(0.65), location: 0.4),
-                    .init(color: .black.opacity(0.28), location: 0.72),
+                    .init(color: .black, location: 0.28),
+                    .init(color: .black.opacity(0.55), location: 0.55),
+                    .init(color: .black.opacity(0.22), location: 0.8),
                     .init(color: .black.opacity(0), location: 1),
                 ],
                 startPoint: .top,
