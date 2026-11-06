@@ -194,7 +194,7 @@ final class NotificationWatcher: ObservableObject {
 
     private func show(_ notification: PulauNotification) {
         let width: CGFloat = 440
-        let height: CGFloat = 160
+        let height: CGFloat = 190
         let panel = panel ?? makePanel(width: width, height: height)
         self.panel = panel
         if panel.contentViewController == nil {
@@ -270,25 +270,22 @@ struct IslandBannerView: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: expanded ? islandWidth : notchWidth,
+        .frame(width: expanded ? islandWidth + 40 : notchWidth + 40,
                height: expanded ? islandHeight : notchHeight, alignment: .top)
-        .background(
-            // Keep the text above the black-to-glass surface.
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: 0.60),
-                    .init(color: .black.opacity(0.45), location: 0.82),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .background(IslandGlass())
-            .allowsHitTesting(false)
-        )
-        .clipShape(IslandShape(radius: expanded ? 28 : 16))
-        .overlay(IslandShape(radius: expanded ? 28 : 16).stroke(.white.opacity(0.08), lineWidth: 1))
+        .background {
+            let shape = IslandShape(radius: expanded ? 34 : 16)
+            ZStack {
+                shape.fill(.black)
+                    .shadow(color: .black.opacity(0.45), radius: 17, y: 20)
+                shape.fill(.black)
+                    .shadow(color: .black.opacity(0.25), radius: 5, y: 4)
+                shape.blendMode(.destinationOut)
+            }
+            .compositingGroup()
+            IslandGlass().clipShape(shape)
+            shape.fill(.black.opacity(0.93))
+            shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
+        }
         .onAppear { presenter.expandFromView() }
     }
 
@@ -328,41 +325,61 @@ struct IslandGlass: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
-            glass.tintColor = NSColor.white.withAlphaComponent(0.1)
-            glass.cornerRadius = 28
-            glass.wantsLayer = true
-            glass.layer?.cornerRadius = 28
-            glass.layer?.cornerCurve = .continuous
-            glass.layer?.masksToBounds = true
+            glass.tintColor = NSColor.black.withAlphaComponent(0.2)
+            glass.cornerRadius = 0
             return glass
         }
         let material = NSVisualEffectView()
         material.material = .hudWindow
         material.blendingMode = .behindWindow
         material.state = .active
-        material.wantsLayer = true
-        material.layer?.cornerRadius = 26
-        material.layer?.cornerCurve = .continuous
-        material.layer?.masksToBounds = true
         return material
     }
 
     func updateNSView(_ view: NSView, context: Context) {}
 }
 
-/// All four corners rounded, matching the Dynamic Lake reference; radius
-/// animates smoothly because the path parameter is the animatable data.
-struct IslandShape: Shape {
+/// A top-edge bridge with concave shoulders and continuous-looking lower corners.
+struct IslandShape: InsettableShape {
     var radius: CGFloat
-    var animatableData: CGFloat {
-        get { radius }
-        set { radius = newValue }
+    var insetAmount: CGFloat = 0
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(radius, insetAmount) }
+        set { radius = newValue.first; insetAmount = newValue.second }
+    }
+
+    func inset(by amount: CGFloat) -> some InsettableShape {
+        var shape = self
+        shape.insetAmount += amount
+        return shape
     }
 
     func path(in rect: CGRect) -> Path {
-        let r = min(radius, min(rect.width, rect.height) / 2)
+        let rect = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        let flare: CGFloat = 20
+        let shoulder: CGFloat = 18
+        let left = rect.minX + flare, right = rect.maxX - flare
+        let r = min(radius, (rect.height - shoulder) / 2, (right - left) / 2)
+        let k: CGFloat = 0.55228475
         var p = Path()
-        p.addRoundedRect(in: rect, cornerSize: CGSize(width: r, height: r), style: .continuous)
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addCurve(to: CGPoint(x: right, y: rect.minY + shoulder),
+                   control1: CGPoint(x: rect.maxX - flare * k, y: rect.minY),
+                   control2: CGPoint(x: right, y: rect.minY + shoulder * (1 - k)))
+        p.addLine(to: CGPoint(x: right, y: rect.maxY - r))
+        p.addCurve(to: CGPoint(x: right - r, y: rect.maxY),
+                   control1: CGPoint(x: right, y: rect.maxY - r * (1 - k)),
+                   control2: CGPoint(x: right - r * (1 - k), y: rect.maxY))
+        p.addLine(to: CGPoint(x: left + r, y: rect.maxY))
+        p.addCurve(to: CGPoint(x: left, y: rect.maxY - r),
+                   control1: CGPoint(x: left + r * (1 - k), y: rect.maxY),
+                   control2: CGPoint(x: left, y: rect.maxY - r * (1 - k)))
+        p.addLine(to: CGPoint(x: left, y: rect.minY + shoulder))
+        p.addCurve(to: CGPoint(x: rect.minX, y: rect.minY),
+                   control1: CGPoint(x: left, y: rect.minY + shoulder * (1 - k)),
+                   control2: CGPoint(x: rect.minX + flare * k, y: rect.minY))
+        p.closeSubpath()
         return p
     }
 }
