@@ -24,8 +24,10 @@ struct PulauNotification: Equatable {
 // instead of spring when Reduce Motion is on.
 enum Motion {
     static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-    static var spring: Animation { reduce ? .easeInOut(duration: 0.15) : .spring(response: 0.4, dampingFraction: 0.78) }
-    static var quick: Animation { reduce ? .easeInOut(duration: 0.1) : .spring(response: 0.3, dampingFraction: 0.85) }
+    // Subtle spring: smooth settle, barely any overshoot.
+    static var spring: Animation { reduce ? .easeInOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9) }
+    // Dismiss: short ease-out so it never drags at the end.
+    static var quick: Animation { reduce ? .easeInOut(duration: 0.1) : .easeOut(duration: 0.22) }
 }
 
 @MainActor
@@ -49,7 +51,7 @@ final class BannerPresenter: ObservableObject {
 
     func dismiss() {
         withAnimation(Motion.quick) { expanded = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.note = nil }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.note = nil }
     }
 }
 
@@ -283,7 +285,17 @@ struct IslandBannerView: View {
             }
             .compositingGroup()
             IslandGlass().clipShape(shape)
-            shape.fill(.black.opacity(0.93))
+            // Four-stage depth: solid -> less solid -> more transparent -> glassy.
+            shape.fill(LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black.opacity(0.9), location: 0.45),
+                    .init(color: .black.opacity(0.7), location: 0.7),
+                    .init(color: .black.opacity(0.18), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            ))
             shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
         }
         .onAppear { presenter.expandFromView() }
