@@ -59,6 +59,17 @@ final class GLMUsageStore: ObservableObject {
     private var notifiedLevel = 100
 
     init() {
+        // Debug: fire the threshold notification immediately, e.g.
+        // `--glm-test-notification 8` (percent optional, default 8).
+        let args = ProcessInfo.processInfo.arguments
+        if let index = args.firstIndex(of: "--glm-test-notification"),
+           index + 1 < args.count,
+           let percent = Double(args[index + 1]) {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1))
+                self?.evaluateThresholds(percent)
+            }
+        }
         let id = generation
         Task {
             do {
