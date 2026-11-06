@@ -5,8 +5,8 @@ import SwiftUI
 // instead of spring when Reduce Motion is on.
 enum Motion {
     static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-    // Subtle spring: smooth settle, barely any overshoot.
-    static var spring: Animation { reduce ? .easeInOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9) }
+    // Lively open with a controlled settle.
+    static var spring: Animation { reduce ? .easeInOut(duration: 0.15) : .spring(response: 0.42, dampingFraction: 0.83) }
     // A finite curve lets the panel hide as soon as the collapse finishes.
     static var dismissDuration: Double { reduce ? 0.1 : 0.2 }
     static func quick(duration: Double) -> Animation { .easeOut(duration: duration) }

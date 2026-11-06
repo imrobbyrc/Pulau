@@ -50,26 +50,21 @@ struct IslandBannerView: View {
             case .glassy:
                 if #available(macOS 26.0, *) {
                     // Native Liquid Glass material, lightly black-tinted, clipped to the island.
-                    Color.clear.glassEffect(.regular.tint(.black.opacity(0.45)), in: shape)
+                    Color.clear.glassEffect(.regular.tint(.black.opacity(0.2)), in: shape)
                 } else {
                     IslandGlass().clipShape(shape)
                 }
-                // Glass-forward: solid notch band, then liquid glass below.
-                shape.fill(LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.28),
-                        .init(color: .black.opacity(0.55), location: 0.55),
-                        .init(color: .black.opacity(0.22), location: 0.8),
-                        .init(color: .black.opacity(0), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ))
+                // Opaque bridge covers the notch and shoulders; glass stays unobscured below.
+                shape.fill(.black)
+                    .mask(alignment: .top) {
+                        GeometryReader { geometry in
+                            Rectangle().frame(height: geometry.size.height * 0.30)
+                        }
+                    }
             case .solid:
                 shape.fill(.black)
             }
-            shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
+            shape.strokeBorder(.white.opacity(presenter.look == .glassy ? 0.15 : 0.12), lineWidth: 0.8)
         }
         .onAppear { presenter.expandFromView() }
     }
@@ -100,6 +95,7 @@ struct IslandBannerView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
+        .shadow(color: .black.opacity(0.9), radius: 3, y: 1)
         .preferredColorScheme(.dark)
     }
 }
