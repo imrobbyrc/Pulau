@@ -11,27 +11,44 @@ public struct CodexTokenKeychain: Sendable {
     public init() {}
 
     public func save(_ tokens: CodexTokens) throws {
-        try put(tokens.accessToken, account: "access-token")
-        try put(tokens.refreshToken, account: "refresh-token")
-        try put(String(tokens.expiresAt.timeIntervalSince1970), account: "expires-at")
+        let record = Record(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken,
+                            expiresAt: tokens.expiresAt.timeIntervalSince1970)
+        let data = try JSONEncoder().encode(record)
+        try put(data.base64EncodedString(), account: "credentials")
     }
 
     public func load() throws -> CodexTokens? {
+        if let encoded = try get("credentials") {
+            guard let data = Data(base64Encoded: encoded),
+                  let record = try? JSONDecoder().decode(Record.self, from: data),
+                  record.expiresAt.isFinite, !record.accessToken.isEmpty, !record.refreshToken.isEmpty,
+                  let accountID = CodexAuth.accountID(from: record.accessToken) else { throw CodexKeychainError.invalidData }
+            return CodexTokens(accessToken: record.accessToken, refreshToken: record.refreshToken,
+                               expiresAt: Date(timeIntervalSince1970: record.expiresAt), accountID: accountID)
+        }
         let access = try get("access-token")
         let refresh = try get("refresh-token")
         let expiry = try get("expires-at")
         if access == nil && refresh == nil && expiry == nil { return nil }
         guard let access, let refresh, let expiry, let seconds = TimeInterval(expiry), seconds.isFinite,
               let accountID = CodexAuth.accountID(from: access) else { throw CodexKeychainError.invalidData }
-        return CodexTokens(accessToken: access, refreshToken: refresh,
-                           expiresAt: Date(timeIntervalSince1970: seconds), accountID: accountID)
+        let tokens = CodexTokens(accessToken: access, refreshToken: refresh,
+                                 expiresAt: Date(timeIntervalSince1970: seconds), accountID: accountID)
+        try save(tokens)
+        return tokens
     }
 
     public func delete() throws {
-        for account in ["access-token", "refresh-token", "expires-at"] {
+        for account in ["access-token", "refresh-token", "expires-at", "credentials"] {
             let status = SecItemDelete(query(account) as CFDictionary)
             guard status == errSecSuccess || status == errSecItemNotFound else { throw CodexKeychainError.status(status) }
         }
+    }
+
+    private struct Record: Codable {
+        let accessToken: String
+        let refreshToken: String
+        let expiresAt: TimeInterval
     }
 
     private func query(_ account: String) -> [String: Any] {
