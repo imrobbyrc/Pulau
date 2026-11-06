@@ -16,7 +16,7 @@ struct CodexUsageClient {
         for attempt in 0...1 {
             let token = try await auth.accessToken(forceRefresh: attempt == 1)
             do {
-                let response = try await request(accessToken: token)
+                let response = try await request(accessToken: token, accountID: await auth.accountID())
                 return try CodexUsageMapper.usage(response.body, primaryHeader: response.primaryHeader, secondaryHeader: response.secondaryHeader)
             } catch let error as HTTPError where error.status == 401 && attempt == 0 {
                 continue
@@ -27,26 +27,17 @@ struct CodexUsageClient {
         throw HTTPError(status: 401, retryAfter: nil)
     }
 
-    private func request(accessToken: String) async throws -> Response {
+    private func request(accessToken: String, accountID: String?) async throws -> Response {
         var request = URLRequest(url: URL(string: "https://chatgpt.com/backend-api/wham/usage")!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let accountID = Self.accountID(accessToken) { request.setValue(accountID, forHTTPHeaderField: "chatgpt_account_id") }
+        if let accountID { request.setValue(accountID, forHTTPHeaderField: "chatgpt_account_id") }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(response.statusCode) else {
             throw HTTPError(status: response.statusCode, retryAfter: Self.retryAfter(response.value(forHTTPHeaderField: "Retry-After")))
         }
         return Response(body: data, primaryHeader: response.value(forHTTPHeaderField: "x-codex-primary-used-percent"), secondaryHeader: response.value(forHTTPHeaderField: "x-codex-secondary-used-percent"))
-    }
-
-    private static func accountID(_ token: String) -> String? {
-        let parts = token.split(separator: ".")
-        guard parts.count > 1 else { return nil }
-        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
-        guard let data = Data(base64Encoded: payload), let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let auth = json["https://api.openai.com/auth"] as? [String: Any] else { return nil }
-        return auth["chatgpt_account_id"] as? String
     }
 
     private static func retryAfter(_ value: String?) -> TimeInterval? {
