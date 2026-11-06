@@ -285,18 +285,18 @@ struct IslandBannerView: View {
             }
             .compositingGroup()
             if #available(macOS 26.0, *) {
-                // Native Liquid Glass material, black-tinted, clipped to the island.
-                Color.clear.glassEffect(.regular.tint(.black), in: shape)
+                // Native Liquid Glass material, lightly black-tinted, clipped to the island.
+                Color.clear.glassEffect(.regular.tint(.black.opacity(0.45)), in: shape)
             } else {
                 IslandGlass().clipShape(shape)
             }
-            // Three-stage depth: solid -> less -> liquid glass early.
+            // Three-stage depth, glass-forward: solid -> less -> liquid.
             shape.fill(LinearGradient(
                 stops: [
                     .init(color: .black, location: 0),
-                    .init(color: .black.opacity(0.8), location: 0.4),
-                    .init(color: .black.opacity(0.45), location: 0.72),
-                    .init(color: .black.opacity(0.1), location: 1),
+                    .init(color: .black.opacity(0.65), location: 0.4),
+                    .init(color: .black.opacity(0.28), location: 0.72),
+                    .init(color: .black.opacity(0), location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
