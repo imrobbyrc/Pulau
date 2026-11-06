@@ -263,8 +263,16 @@ struct IslandBannerView: View {
     @ViewBuilder
     private var surface: some View {
         let expanded = presenter.expanded
+        // Top corners stay square so the surface bridges seamlessly into the
+        // notch line; the bottom is heavily rounded, per the reference spec.
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 36,
+            bottomTrailingRadius: 36,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
         VStack(spacing: 0) {
-            // Keep the real notch line clear so the surface reads as growing out of it.
             Color.clear.frame(height: 16)
             if let note = presenter.note {
                 bannerContent(note)
@@ -275,34 +283,16 @@ struct IslandBannerView: View {
         .frame(width: expanded ? islandWidth + 40 : notchWidth + 40,
                height: expanded ? islandHeight : notchHeight, alignment: .top)
         .background {
-            let shape = IslandShape(radius: expanded ? 34 : 16)
             ZStack {
-                shape.fill(.black)
-                    .shadow(color: .black.opacity(0.45), radius: 17, y: 20)
-                shape.fill(.black)
-                    .shadow(color: .black.opacity(0.25), radius: 5, y: 4)
-                shape.blendMode(.destinationOut)
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .environment(\.colorScheme, .dark)
+                Color.black.opacity(0.88)
             }
-            .compositingGroup()
-            if #available(macOS 26.0, *) {
-                // Native Liquid Glass material, black-tinted, clipped to the island.
-                Color.clear.glassEffect(.regular.tint(.black), in: shape)
-            } else {
-                IslandGlass().clipShape(shape)
-            }
-            // Three-stage depth: solid -> less -> liquid glass early.
-            shape.fill(LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black.opacity(0.8), location: 0.4),
-                    .init(color: .black.opacity(0.45), location: 0.72),
-                    .init(color: .black.opacity(0.1), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            ))
-            shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
+            .clipShape(shape)
+            .overlay(shape.stroke(Color.white.opacity(0.15), lineWidth: 0.8))
         }
+        .shadow(color: Color.black.opacity(0.5), radius: 20, x: 0, y: 10)
         .onAppear { presenter.expandFromView() }
     }
 
@@ -333,70 +323,5 @@ struct IslandBannerView: View {
         }
         .padding(.horizontal, 16)
         .preferredColorScheme(.dark)
-    }
-}
-
-/// iOS 27-style semi glass black: Liquid Glass tinted dark on macOS 26+,
-/// HUD material fallback below.
-struct IslandGlass: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView()
-            glass.tintColor = NSColor.black.withAlphaComponent(0.2)
-            glass.cornerRadius = 0
-            return glass
-        }
-        let material = NSVisualEffectView()
-        material.material = .hudWindow
-        material.blendingMode = .behindWindow
-        material.state = .active
-        return material
-    }
-
-    func updateNSView(_ view: NSView, context: Context) {}
-}
-
-/// A top-edge bridge with concave shoulders and continuous-looking lower corners.
-struct IslandShape: InsettableShape {
-    var radius: CGFloat
-    var insetAmount: CGFloat = 0
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(radius, insetAmount) }
-        set { radius = newValue.first; insetAmount = newValue.second }
-    }
-
-    func inset(by amount: CGFloat) -> some InsettableShape {
-        var shape = self
-        shape.insetAmount += amount
-        return shape
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let rect = rect.insetBy(dx: insetAmount, dy: insetAmount)
-        let flare: CGFloat = 20
-        let shoulder: CGFloat = 18
-        let left = rect.minX + flare, right = rect.maxX - flare
-        let r = min(radius, (rect.height - shoulder) / 2, (right - left) / 2)
-        let k: CGFloat = 0.55228475
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addCurve(to: CGPoint(x: right, y: rect.minY + shoulder),
-                   control1: CGPoint(x: rect.maxX - flare * k, y: rect.minY),
-                   control2: CGPoint(x: right, y: rect.minY + shoulder * (1 - k)))
-        p.addLine(to: CGPoint(x: right, y: rect.maxY - r))
-        p.addCurve(to: CGPoint(x: right - r, y: rect.maxY),
-                   control1: CGPoint(x: right, y: rect.maxY - r * (1 - k)),
-                   control2: CGPoint(x: right - r * (1 - k), y: rect.maxY))
-        p.addLine(to: CGPoint(x: left + r, y: rect.maxY))
-        p.addCurve(to: CGPoint(x: left, y: rect.maxY - r),
-                   control1: CGPoint(x: left + r * (1 - k), y: rect.maxY),
-                   control2: CGPoint(x: left, y: rect.maxY - r * (1 - k)))
-        p.addLine(to: CGPoint(x: left, y: rect.minY + shoulder))
-        p.addCurve(to: CGPoint(x: rect.minX, y: rect.minY),
-                   control1: CGPoint(x: left, y: rect.minY + shoulder * (1 - k)),
-                   control2: CGPoint(x: rect.minX + flare * k, y: rect.minY))
-        p.closeSubpath()
-        return p
     }
 }
