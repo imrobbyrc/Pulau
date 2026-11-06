@@ -54,13 +54,20 @@ struct IslandBannerView: View {
                 } else {
                     IslandGlass().clipShape(shape)
                 }
-                // Opaque bridge covers the notch and shoulders; glass stays unobscured below.
+                // Opaque through the notch band, then a seamless fade into the
+                // native glass below — no hard cut line.
                 shape.fill(.black)
-                    .mask(alignment: .top) {
-                        GeometryReader { geometry in
-                            Rectangle().frame(height: geometry.size.height * 0.30)
-                        }
-                    }
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.22),
+                                .init(color: .black.opacity(0), location: 0.5),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
             case .solid:
                 shape.fill(.black)
             }
