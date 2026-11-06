@@ -5,11 +5,14 @@ import SwiftUI
 struct PulauApp: App {
     @StateObject private var notifications: NotificationWatcher
     @StateObject private var glm: GLMUsageStore
+    @StateObject private var codex: CodexUsageStore
 
     init() {
         let store = GLMUsageStore()
+        let codexStore = CodexUsageStore()
         _glm = StateObject(wrappedValue: store)
-        _notifications = StateObject(wrappedValue: NotificationWatcher(glm: store))
+        _codex = StateObject(wrappedValue: codexStore)
+        _notifications = StateObject(wrappedValue: NotificationWatcher(glm: store, codex: codexStore))
     }
 
     var body: some Scene {
@@ -55,6 +58,23 @@ struct PulauApp: App {
                     Button("GLM: set API key…") { setGLMKey() }
                     if let error = glm.error { Text(error) }
                 }
+            }
+            Section("Codex") {
+                if codex.signInState == .signedIn {
+                    if let percent = codex.fiveHourRemaining {
+                        Text("Codex 5h: \(Int(percent.rounded()))% left")
+                    } else {
+                        Text(codex.loading ? "Codex: loading…" : "Codex 5h: unavailable")
+                    }
+                    Button("Refresh Codex") { codex.refreshNow() }
+                    Button("Sign out of Codex") { codex.signOut() }
+                } else if codex.signInState == .signingIn {
+                    Text("Codex: signing in…")
+                    Button("Cancel Codex sign-in") { codex.signOut() }
+                } else {
+                    Button("Sign in to Codex…") { codex.signIn() }
+                }
+                if let error = codex.error { Text(error) }
             }
             Divider()
             Button("Quit Pulau") { NSApplication.shared.terminate(nil) }

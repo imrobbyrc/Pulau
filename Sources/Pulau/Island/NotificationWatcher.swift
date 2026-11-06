@@ -15,6 +15,7 @@ final class NotificationWatcher: ObservableObject {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private let glm: GLMUsageStore
+    private let codex: CodexUsageStore
     private var pointerInside = false
 
     /// Active island look; persisted so the choice survives relaunch.
@@ -29,8 +30,9 @@ final class NotificationWatcher: ObservableObject {
     // panel+hosting rendering from view logic.
     private let plainRect = ProcessInfo.processInfo.arguments.contains("--plain")
 
-    init(glm: GLMUsageStore) {
+    init(glm: GLMUsageStore, codex: CodexUsageStore) {
         self.glm = glm
+        self.codex = codex
         presenter.look = look
         DispatchQueue.main.async { [weak self] in self?.showIsland() }
         // Debug affordance: run the binary with --test-banner to flash a
@@ -118,7 +120,7 @@ final class NotificationWatcher: ObservableObject {
         self.panel = panel
         let controller = NSHostingController(rootView: plainRect
             ? AnyView(Rectangle().fill(.red).frame(width: 440, height: 160))
-            : AnyView(IslandBannerView(presenter: presenter, glm: glm).frame(width: width, height: height, alignment: .top)))
+            : AnyView(IslandBannerView(presenter: presenter, glm: glm, codex: codex).frame(width: width, height: height, alignment: .top)))
         controller.sizingOptions = []
         panel.contentViewController = controller
         panel.setContentSize(NSSize(width: width, height: height))

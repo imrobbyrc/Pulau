@@ -5,6 +5,7 @@ import SwiftUI
 struct IslandBannerView: View {
     @ObservedObject var presenter: BannerPresenter
     @ObservedObject var glm: GLMUsageStore
+    @ObservedObject var codex: CodexUsageStore
     private let notchWidth: CGFloat = 185
     private let notchHeight: CGFloat = 32
     private let islandWidth: CGFloat = 360
@@ -81,40 +82,36 @@ struct IslandBannerView: View {
     }
 
     private var usageContent: some View {
-        HStack(spacing: 10) {
-            Text("GLM")
-                .font(.custom("JetBrainsMono-Regular", size: 11).bold())
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                if !glm.hasKey {
-                    Text("GLM: set API key…")
-                        .font(.custom("JetBrainsMono-Regular", size: 12).bold())
-                    Text("Use the Pulau menu to add your key")
-                        .font(.custom("JetBrainsMono-Regular", size: 10))
-                        .foregroundStyle(.white.opacity(0.65))
-                } else if let percent = glm.fiveHourRemainingPercent {
-                    Text("5h  \(Int(percent.rounded()))% left")
-                        .font(.custom("JetBrainsMono-Regular", size: 15).bold())
-                    HStack(spacing: 8) {
-                        if let weekly = glm.weeklyRemainingPercent {
-                            Text("Weekly \(Int(weekly.rounded()))% left")
-                        }
-                        if let plan = glm.planName { Text(plan) }
-                    }
-                    .font(.custom("JetBrainsMono-Regular", size: 10))
-                    .foregroundStyle(.white.opacity(0.65))
-                } else {
-                    Text(glm.error ?? (glm.loading ? "Loading usage…" : "Usage unavailable"))
-                        .font(.custom("JetBrainsMono-Regular", size: 11))
-                }
-            }
-            Spacer(minLength: 0)
+        HStack(spacing: 12) {
+            usageItem(name: "GLM", mark: .glm, percent: glm.error == nil ? glm.fiveHourRemainingPercent : nil,
+                      status: glm.error ?? (!glm.hasKey ? "Set API key" : (glm.loading ? "Loading…" : "Unavailable")))
+            Rectangle().fill(.white.opacity(0.18)).frame(width: 1, height: 28)
+            usageItem(name: "Codex", mark: .codex, percent: codex.error == nil ? codex.fiveHourRemaining : nil,
+                      status: codex.error ?? (codex.signInState == .signingIn ? "Signing in…" :
+                        (codex.signInState != .signedIn ? "Sign in via menu" : (codex.loading ? "Loading…" : "Unavailable"))))
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 14)
         .preferredColorScheme(.dark)
+    }
+
+    private func usageItem(name: String, mark: ProviderMark.Kind, percent: Double?, status: String) -> some View {
+        HStack(spacing: 7) {
+            ProviderMark(kind: mark)
+                .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
+                .frame(width: 22, height: 22)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.65))
+                Text(percent.map { "5h  \(Int($0.rounded()))% left" } ?? status)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(status)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
@@ -145,6 +142,31 @@ struct IslandBannerView: View {
         .padding(.horizontal, 16)
         .shadow(color: .black.opacity(0.9), radius: 3, y: 1)
         .preferredColorScheme(.dark)
+    }
+}
+
+/// Small, original provider-inspired marks rather than official logos.
+private struct ProviderMark: Shape {
+    enum Kind { case glm, codex }
+    let kind: Kind
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let x = rect.minX, y = rect.minY, w = rect.width, h = rect.height
+        switch kind {
+        case .glm:
+            path.move(to: CGPoint(x: x + w * 0.12, y: y + h * 0.68))
+            path.addLines([CGPoint(x: x + w * 0.32, y: y + h * 0.25),
+                           CGPoint(x: x + w * 0.50, y: y + h * 0.68),
+                           CGPoint(x: x + w * 0.68, y: y + h * 0.25),
+                           CGPoint(x: x + w * 0.88, y: y + h * 0.68)])
+        case .codex:
+            path.move(to: CGPoint(x: x + w * 0.38, y: y + h * 0.2))
+            path.addLines([CGPoint(x: x + w * 0.12, y: y + h * 0.5), CGPoint(x: x + w * 0.38, y: y + h * 0.8)])
+            path.move(to: CGPoint(x: x + w * 0.62, y: y + h * 0.2))
+            path.addLines([CGPoint(x: x + w * 0.88, y: y + h * 0.5), CGPoint(x: x + w * 0.62, y: y + h * 0.8)])
+        }
+        return path
     }
 }
 
