@@ -28,6 +28,15 @@ struct PulauApp: App {
             )) {
                 Text("Glassy").tag(IslandLook.glassy)
                 Text("Solid").tag(IslandLook.solid)
+                Text("System (Experimental)").tag(IslandLook.systemExperimental)
+            }
+            .pickerStyle(.inline)
+            Picker("Expand Size", selection: Binding(
+                get: { notifications.expandPreference },
+                set: { notifications.expandPreference = $0 }
+            )) {
+                Text("Default").tag(ExpandPreference.default)
+                Text("Minimal").tag(ExpandPreference.minimal)
             }
             .pickerStyle(.inline)
             Text(notifications.status)

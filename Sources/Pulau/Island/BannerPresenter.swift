@@ -16,40 +16,60 @@ enum Motion {
 enum IslandLook: String, CaseIterable {
     case glassy
     case solid
+    case systemExperimental
+}
+
+enum ExpandPreference: String {
+    case `default`, minimal
+}
+
+enum IslandState {
+    case collapsed, minimal, full
+
+    var width: CGFloat { self == .collapsed ? 185 : 360 }
+    var height: CGFloat { self == .full ? 174 : 32 }
 }
 
 @MainActor
 final class BannerPresenter: ObservableObject {
     @Published private(set) var note: PulauNotification?
-    @Published private(set) var expanded = false
+    @Published private(set) var state: IslandState = .collapsed
+    @Published var expandPreference: ExpandPreference = .default {
+        didSet {
+            if note == nil && hovered { showHoverState() }
+        }
+    }
     @Published private(set) var generation = UUID()
     private(set) var hovered = false
     @Published var look: IslandLook = UserDefaults.standard.string(forKey: "islandLook").flatMap(IslandLook.init(rawValue:)) ?? .glassy
 
     func present(_ notification: PulauNotification) {
         note = notification
-        expanded = false
+        state = .collapsed
         generation = UUID()
     }
 
     func expandFromView() {
-        guard !expanded else { return }
-        withAnimation(Motion.spring) { expanded = true }
+        withAnimation(Motion.spring) { state = .full }
+    }
+
+    private func showHoverState() {
+        withAnimation(Motion.spring) { state = expandPreference == .minimal ? .minimal : .full }
     }
 
     func setHovered(_ value: Bool) {
         hovered = value
         guard note == nil else { return }
-        if value { expandFromView() } else { dismiss() }
+        if value { showHoverState() } else { dismiss() }
     }
 
     func dismiss(duration: Double = Motion.dismissDuration) {
-        withAnimation(Motion.quick(duration: duration)) { expanded = false }
+        withAnimation(Motion.quick(duration: duration)) { state = .collapsed }
     }
 
     func clear() {
         note = nil
-        if hovered { expandFromView() }
+        if hovered { showHoverState() }
     }
 }
 

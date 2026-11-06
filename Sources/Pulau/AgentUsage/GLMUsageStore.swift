@@ -46,6 +46,7 @@ final class GLMUsageStore: ObservableObject {
     @Published private(set) var hasKey = false
     @Published private(set) var loading = false
     @Published private(set) var fiveHourRemainingPercent: Double?
+    @Published private(set) var fiveHourResetAt: Date?
     @Published private(set) var weeklyRemainingPercent: Double?
     @Published private(set) var planName: String?
     @Published private(set) var error: String?
@@ -125,6 +126,7 @@ final class GLMUsageStore: ObservableObject {
 
     private func clearUsage() {
         fiveHourRemainingPercent = nil
+        fiveHourResetAt = nil
         weeklyRemainingPercent = nil
         planName = nil
         error = nil
@@ -191,6 +193,7 @@ final class GLMUsageStore: ObservableObject {
             catch { subscription = nil }
             guard !Task.isCancelled, generation == id else { return }
             fiveHourRemainingPercent = session.remainingPercent
+            fiveHourResetAt = session.resetAt
             weeklyRemainingPercent = limits.first(where: { $0.kind == .weekly })?.remainingPercent
             planName = subscription.flatMap(ZAIUsageMapper.planName)
             error = nil

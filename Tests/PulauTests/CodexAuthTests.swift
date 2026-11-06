@@ -3,12 +3,23 @@ import XCTest
 @testable import Pulau
 
 final class CodexAuthTests: XCTestCase {
+    func testCodexAuthorizationRequest() throws {
+        let url = CodexAuth.authorizationURL(verifier: "test-verifier", state: "test-state")
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let items = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+        XCTAssertEqual(items["redirect_uri"], "http://localhost:1455/auth/callback")
+        XCTAssertEqual(items["codex_cli_simplified_flow"], "true")
+        XCTAssertEqual(items["code_challenge_method"], "S256")
+        XCTAssertEqual(items["state"], "test-state")
+        XCTAssertEqual(CodexAuth.callbackPath, "/auth/callback")
+    }
+
     func testFragmentedCallbackRequestLine() throws {
         var parser = CallbackRequestLine()
-        XCTAssertNil(try parser.append(Data("GET /callback?code=abc&sta".utf8)))
+        XCTAssertNil(try parser.append(Data("GET /auth/callback?code=abc&sta".utf8)))
         XCTAssertNil(try parser.append(Data("te=fixture HTTP/1.1\r".utf8)))
         XCTAssertEqual(try parser.append(Data("\nHost: localhost\r\n".utf8)),
-                       "GET /callback?code=abc&state=fixture HTTP/1.1")
+                       "GET /auth/callback?code=abc&state=fixture HTTP/1.1")
         var oversized = CallbackRequestLine()
         XCTAssertThrowsError(try oversized.append(Data(repeating: 65, count: 16385)))
     }

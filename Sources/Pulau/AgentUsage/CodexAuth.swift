@@ -32,7 +32,8 @@ public enum CodexAuthError: Error {
 
 public actor CodexAuth {
     private static let clientID = "app_EMoamEEZ73f0CkXaXp7hrann"
-    private static let redirectURI = "http://localhost:1455/callback"
+    static let callbackPath = "/auth/callback"
+    static let redirectURI = "http://localhost:1455" + callbackPath
     private var attempt: LoopbackAttempt?
     private var signInTask: Task<CodexTokens, Error>?
     private var refreshTask: (id: UUID, task: Task<CodexTokens, Error>)?
@@ -108,17 +109,7 @@ public actor CodexAuth {
         let loopback = try await LoopbackAttempt(state: state)
         guard generation == currentGeneration else { throw CancellationError() }
         attempt = loopback
-        var url = URLComponents(string: "https://auth.openai.com/oauth/authorize")!
-        url.queryItems = [
-            URLQueryItem(name: "client_id", value: Self.clientID),
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "redirect_uri", value: Self.redirectURI),
-            URLQueryItem(name: "scope", value: "openid profile email offline_access"),
-            URLQueryItem(name: "code_challenge", value: Self.codeChallenge(for: verifier)),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-            URLQueryItem(name: "state", value: state)
-        ]
-        let authorizationURL = url.url!
+        let authorizationURL = Self.authorizationURL(verifier: verifier, state: state)
         let task = Task {
             let code = try await loopback.wait(for: authorizationURL)
             try Task.checkCancellation()
@@ -138,6 +129,23 @@ public actor CodexAuth {
         guard generation == currentGeneration, attempt === loopback else { throw CancellationError() }
         try keychain.save(tokens)
         accountID = tokens.accountID
+    }
+
+    nonisolated static func authorizationURL(verifier: String, state: String) -> URL {
+        var url = URLComponents(string: "https://auth.openai.com/oauth/authorize")!
+        url.queryItems = [
+            URLQueryItem(name: "client_id", value: Self.clientID),
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "redirect_uri", value: Self.redirectURI),
+            URLQueryItem(name: "scope", value: "openid profile email offline_access"),
+            URLQueryItem(name: "code_challenge", value: Self.codeChallenge(for: verifier)),
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
+            URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "id_token_add_organizations", value: "true"),
+            URLQueryItem(name: "codex_cli_simplified_flow", value: "true"),
+            URLQueryItem(name: "originator", value: "pi")
+        ]
+        return url.url!
     }
 
     private func refresh(_ tokens: CodexTokens) async throws -> CodexTokens {
@@ -292,7 +300,7 @@ private final class LoopbackAttempt {
                 } catch { connection.cancel(); return }
                 let parts = firstLine.split(separator: " ")
                 guard parts.count >= 2, parts[0] == "GET",
-                      let url = URLComponents(string: "http://localhost\(parts[1])"), url.path == "/callback",
+                      let url = URLComponents(string: "http://localhost\(parts[1])"), url.path == CodexAuth.callbackPath,
                       let items = url.queryItems,
                       items.first(where: { $0.name == "state" })?.value == self.state else {
                     connection.cancel(); return

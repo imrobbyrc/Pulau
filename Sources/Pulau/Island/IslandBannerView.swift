@@ -6,11 +6,9 @@ struct IslandBannerView: View {
     @ObservedObject var presenter: BannerPresenter
     @ObservedObject var glm: GLMUsageStore
     @ObservedObject var codex: CodexUsageStore
-    private let notchWidth: CGFloat = 185
-    private let notchHeight: CGFloat = 32
     private let islandWidth: CGFloat = 360
     private let contentHeight: CGFloat = 52
-    private let islandHeight: CGFloat = 96
+    private let islandHeight: CGFloat = 174
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -21,32 +19,51 @@ struct IslandBannerView: View {
 
     @ViewBuilder
     private var surface: some View {
-        let expanded = presenter.expanded
+        let expanded = presenter.state == .full
         VStack(spacing: 0) {
             // Keep the real notch line clear so the surface reads as growing out of it.
-            Color.clear.frame(height: 34)
+            Color.clear.frame(height: presenter.note == nil ? 54 : 34)
             if let note = presenter.note {
                 bannerContent(note)
                     .frame(width: islandWidth - 32, height: contentHeight)
                     .opacity(expanded ? 1 : 0)
             } else if expanded {
                 usageContent
-                    .frame(width: islandWidth - 32, height: contentHeight)
+                    .frame(width: islandWidth - 80, height: islandHeight - 74)
                     .transition(.opacity)
             }
         }
-        .frame(width: expanded ? islandWidth : notchWidth,
-               height: expanded ? islandHeight : notchHeight, alignment: .top)
+        .frame(width: presenter.state.width, height: presenter.state.height, alignment: .top)
+        .overlay(alignment: .top) {
+            Button(action: presenter.expandFromView) {
+                HStack(spacing: 0) {
+                    minimalProvider(icon: "codex", name: "Codex", value: codex.error == nil ? codex.fiveHourRemaining : nil)
+                    Spacer(minLength: 185)
+                    minimalProvider(icon: "zai", name: "GLM", value: glm.error == nil ? glm.fiveHourRemainingPercent : nil)
+                }
+                .frame(width: islandWidth - 40, height: 32)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show agent usage details")
+            .opacity(presenter.state == .minimal ? 1 : 0)
+            .allowsHitTesting(presenter.state == .minimal)
+            .accessibilityHidden(presenter.state != .minimal)
+            .frame(width: presenter.state.width, height: 32)
+            .clipped()
+        }
         .background {
             let shape = IslandShape(radius: expanded ? 34 : 16)
-            ZStack {
-                shape.fill(.black)
-                    .shadow(color: .black.opacity(expanded ? 0.25 : 0), radius: 12, y: 12)
-                shape.fill(.black)
-                    .shadow(color: .black.opacity(expanded ? 0.25 : 0), radius: 5, y: 4)
-                shape.blendMode(.destinationOut)
+            if presenter.look != .systemExperimental {
+                ZStack {
+                    shape.fill(.black)
+                        .shadow(color: .black.opacity(expanded ? 0.25 : 0), radius: 12, y: 12)
+                    shape.fill(.black)
+                        .shadow(color: .black.opacity(expanded ? 0.25 : 0), radius: 5, y: 4)
+                    shape.blendMode(.destinationOut)
+                }
+                .compositingGroup()
             }
-            .compositingGroup()
             switch presenter.look {
             case .glassy:
                 if #available(macOS 26.0, *) {
@@ -76,42 +93,112 @@ struct IslandBannerView: View {
                     )
             case .solid:
                 shape.fill(.black)
+            case .systemExperimental:
+                PrivateGlassBackdrop()
+            }
+            if presenter.look != .solid {
+                shape.fill(.black)
+                    .opacity(presenter.expandPreference == .minimal && !expanded ? 1 : 0)
             }
             shape.strokeBorder(.white.opacity(expanded ? (presenter.look == .glassy ? 0.25 : 0.12) : 0), lineWidth: 0.8)
         }
     }
 
-    private var usageContent: some View {
-        HStack(spacing: 12) {
-            usageItem(name: "GLM", mark: .glm, percent: glm.error == nil ? glm.fiveHourRemainingPercent : nil,
-                      status: glm.error ?? (!glm.hasKey ? "Set API key" : (glm.loading ? "Loading…" : "Unavailable")))
-            Rectangle().fill(.white.opacity(0.18)).frame(width: 1, height: 28)
-            usageItem(name: "Codex", mark: .codex, percent: codex.error == nil ? codex.fiveHourRemaining : nil,
-                      status: codex.error ?? (codex.signInState == .signingIn ? "Signing in…" :
-                        (codex.signInState != .signedIn ? "Sign in via menu" : (codex.loading ? "Loading…" : "Unavailable"))))
+    private func minimalProvider(icon: String, name: String, value: Double?) -> some View {
+        HStack(spacing: 4) {
+            ProviderIcon(name: icon, size: 14)
+            Text(percentage(value))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .lineLimit(1)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .preferredColorScheme(.dark)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(name), 5 hour remaining \(percentage(value))")
     }
 
-    private func usageItem(name: String, mark: ProviderMark.Kind, percent: Double?, status: String) -> some View {
-        HStack(spacing: 7) {
-            ProviderMark(kind: mark)
-                .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
-                .frame(width: 22, height: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.system(size: 10, weight: .medium)).foregroundStyle(.white.opacity(0.65))
-                Text(percent.map { "5h  \(Int($0.rounded()))% left" } ?? status)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(status)
+    private var usageContent: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            HStack(alignment: .top, spacing: 14) {
+                providerColumn(name: "Codex", icon: "codex",
+                               value: codex.error == nil ? codex.fiveHourRemaining : nil,
+                               reset: codex.error == nil ? codex.primaryResetAt : nil,
+                               weekly: codex.error == nil ? codex.secondaryRemaining : nil,
+                               weeklyReset: codex.error == nil ? codex.secondaryResetAt : nil,
+                               status: codex.error ?? (codex.signInState == .signingIn ? "Signing in…" : "Sign in via menu"),
+                               showWeekly: true, now: context.date)
+                Rectangle().fill(.white.opacity(0.16)).frame(width: 1)
+                providerColumn(name: "GLM", icon: "zai",
+                               value: glm.error == nil ? glm.fiveHourRemainingPercent : nil,
+                               reset: glm.error == nil ? glm.fiveHourResetAt : nil,
+                               weekly: nil, weeklyReset: nil,
+                               status: glm.error ?? (glm.hasKey ? "Loading…" : "Set API key via menu"),
+                               showWeekly: false, now: context.date)
+            }
+            .foregroundStyle(.white)
+            .monospacedDigit()
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    private func providerColumn(name: String, icon: String, value: Double?, reset: Date?, weekly: Double?, weeklyReset: Date?, status: String, showWeekly: Bool, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                ProviderIcon(name: icon)
+                Text(name.uppercased())
+                    .font(.custom("JetBrainsMono-Regular", size: 9).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer(minLength: 0)
+            }
+            HStack(alignment: .center) {
+                Text(value.map(percentage) ?? "—")
+                    .font(.custom("JetBrainsMono-Regular", size: 18).weight(.semibold))
+                Spacer(minLength: 2)
+                if let value {
+                    ZStack {
+                        Circle().stroke(.white.opacity(0.17), lineWidth: 3)
+                        Circle().trim(from: 0, to: min(1, max(0, value / 100)))
+                            .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                    }
+                    .frame(width: 20, height: 20)
+                    .accessibilityHidden(true)
+                }
+            }
+            HStack(spacing: 3) {
+                if value == nil {
+                    Text(status).lineLimit(1).truncationMode(.tail)
+                } else {
+                    Text("5h")
+                    if let reset, let countdown = ResetCountdown.text(until: reset, now: now) {
+                        Text("· ↻ \(countdown)")
+                    }
+                }
+            }
+            .font(.custom("JetBrainsMono-Regular", size: 9))
+            .foregroundStyle(.white.opacity(0.7))
+            if showWeekly {
+                Rectangle().fill(.white.opacity(0.16)).frame(height: 1)
+                HStack(spacing: 4) {
+                    Text("1w")
+                    Text(percentage(weekly))
+                    if let weeklyReset, let countdown = ResetCountdown.text(until: weeklyReset, now: now), weekly != nil {
+                        Text(countdown).foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+                .font(.custom("JetBrainsMono-Regular", size: 9))
+                .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .help(value == nil ? status : "\(name): remaining usage")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(name), 5 hour remaining \(percentage(value))\(showWeekly ? ", 1 week remaining \(percentage(weekly))" : "")")
+    }
+
+    private func percentage(_ value: Double?) -> String {
+        value.map { "\(Int($0.rounded()))%" } ?? "—"
     }
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
@@ -145,28 +232,21 @@ struct IslandBannerView: View {
     }
 }
 
-/// Small, original provider-inspired marks rather than official logos.
-private struct ProviderMark: Shape {
-    enum Kind { case glm, codex }
-    let kind: Kind
+private struct ProviderIcon: View {
+    let name: String
+    var size: CGFloat = 24
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let x = rect.minX, y = rect.minY, w = rect.width, h = rect.height
-        switch kind {
-        case .glm:
-            path.move(to: CGPoint(x: x + w * 0.12, y: y + h * 0.68))
-            path.addLines([CGPoint(x: x + w * 0.32, y: y + h * 0.25),
-                           CGPoint(x: x + w * 0.50, y: y + h * 0.68),
-                           CGPoint(x: x + w * 0.68, y: y + h * 0.25),
-                           CGPoint(x: x + w * 0.88, y: y + h * 0.68)])
-        case .codex:
-            path.move(to: CGPoint(x: x + w * 0.38, y: y + h * 0.2))
-            path.addLines([CGPoint(x: x + w * 0.12, y: y + h * 0.5), CGPoint(x: x + w * 0.38, y: y + h * 0.8)])
-            path.move(to: CGPoint(x: x + w * 0.62, y: y + h * 0.2))
-            path.addLines([CGPoint(x: x + w * 0.88, y: y + h * 0.5), CGPoint(x: x + w * 0.62, y: y + h * 0.8)])
+    var body: some View {
+        Group {
+            if let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "ProviderIcons"),
+               let image = NSImage(contentsOf: url) {
+                Image(nsImage: image).renderingMode(.template).resizable().scaledToFit()
+            } else {
+                Image(systemName: "circle.dashed").resizable().scaledToFit()
+            }
         }
-        return path
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

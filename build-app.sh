@@ -6,8 +6,11 @@ swift build -c release
 APP="dist/Pulau.app"
 CONTENTS="$APP/Contents"
 rm -rf "$APP"
-mkdir -p "$CONTENTS/MacOS"
+mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
 cp .build/release/Pulau "$CONTENTS/MacOS/Pulau"
+RESOURCE_BUNDLE=".build/release/Pulau_Pulau.bundle"
+[ -d "$RESOURCE_BUNDLE" ] || { echo "FAIL: resource bundle missing: $RESOURCE_BUNDLE"; exit 1; }
+cp -R "$RESOURCE_BUNDLE" "$CONTENTS/Resources/"
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

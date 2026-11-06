@@ -7,6 +7,7 @@ final class NotificationWatcher: ObservableObject {
     @Published private(set) var status = "Off"
 
     private let capture = NotificationCapture()
+    private let preferences: IslandPreferences
     private var timer: Timer?
     private let presenter = BannerPresenter()
     private var panel: NSPanel?
@@ -20,20 +21,33 @@ final class NotificationWatcher: ObservableObject {
 
     /// Active island look; persisted so the choice survives relaunch.
     /// Published so the menu checkmark follows immediately.
-    @Published var look: IslandLook = UserDefaults.standard.string(forKey: "islandLook").flatMap(IslandLook.init(rawValue:)) ?? .glassy {
+    @Published var look: IslandLook {
         didSet {
             presenter.look = look
-            UserDefaults.standard.set(look.rawValue, forKey: "islandLook")
+            preferences.look = look
+        }
+    }
+    @Published var expandPreference: ExpandPreference {
+        didSet {
+            presenter.expandPreference = expandPreference
+            preferences.expandPreference = expandPreference
+            updatePointer()
         }
     }
     // Debug: swap the island for an unconditional red rect to isolate
     // panel+hosting rendering from view logic.
     private let plainRect = ProcessInfo.processInfo.arguments.contains("--plain")
 
-    init(glm: GLMUsageStore, codex: CodexUsageStore) {
+    init(glm: GLMUsageStore, codex: CodexUsageStore, defaults: UserDefaults = .standard) {
         self.glm = glm
         self.codex = codex
+        let preferences = IslandPreferences(defaults: defaults)
+        self.preferences = preferences
+        self.look = preferences.look
+        self.expandPreference = preferences.expandPreference
         presenter.look = look
+        presenter.expandPreference = expandPreference
+        if preferences.notificationsEnabled { start() }
         DispatchQueue.main.async { [weak self] in self?.showIsland() }
         // Debug affordance: run the binary with --test-banner to flash a
         // banner and quit, so capture can be checked without UI scripting.
@@ -78,6 +92,7 @@ final class NotificationWatcher: ObservableObject {
 
     func start() {
         guard !isListening else { return }
+        preferences.notificationsEnabled = true
         isListening = true
         capture.start()
         poll()
@@ -87,6 +102,7 @@ final class NotificationWatcher: ObservableObject {
     }
 
     func stop() {
+        preferences.notificationsEnabled = false
         isListening = false
         timer?.invalidate()
         timer = nil
@@ -142,8 +158,8 @@ final class NotificationWatcher: ObservableObject {
     private func updatePointer() {
         guard let panel else { return }
         let frame = panel.frame
-        let width: CGFloat = presenter.expanded ? 360 : 185
-        let height: CGFloat = presenter.expanded ? 96 : 32
+        let width = presenter.state.width
+        let height = presenter.state.height
         let rect = NSRect(x: frame.midX - width / 2, y: frame.maxY - height,
                           width: width, height: height).insetBy(dx: -4, dy: -4)
         let inside = rect.contains(NSEvent.mouseLocation)
