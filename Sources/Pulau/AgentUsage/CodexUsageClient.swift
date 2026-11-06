@@ -16,7 +16,7 @@ struct CodexUsageClient {
         for attempt in 0...1 {
             let token = try await auth.accessToken(forceRefresh: attempt == 1)
             do {
-                let response = try await request(accessToken: token, accountID: await auth.accountID())
+                let response = try await request(accessToken: token, accountID: await auth.accountID)
                 return try CodexUsageMapper.usage(response.body, primaryHeader: response.primaryHeader, secondaryHeader: response.secondaryHeader)
             } catch let error as HTTPError where error.status == 401 && attempt == 0 {
                 continue
