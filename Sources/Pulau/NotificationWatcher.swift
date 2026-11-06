@@ -284,14 +284,19 @@ struct IslandBannerView: View {
                 shape.blendMode(.destinationOut)
             }
             .compositingGroup()
-            IslandGlass().clipShape(shape)
-            // Four-stage depth: solid -> less solid -> more transparent -> glassy.
+            if #available(macOS 26.0, *) {
+                // Native Liquid Glass material, clipped to the island.
+                Color.clear.glassEffect(.regular, in: shape)
+            } else {
+                IslandGlass().clipShape(shape)
+            }
+            // Three-stage depth: solid -> less -> liquid glass early.
             shape.fill(LinearGradient(
                 stops: [
                     .init(color: .black, location: 0),
-                    .init(color: .black.opacity(0.9), location: 0.45),
-                    .init(color: .black.opacity(0.7), location: 0.7),
-                    .init(color: .black.opacity(0.18), location: 1),
+                    .init(color: .black.opacity(0.8), location: 0.4),
+                    .init(color: .black.opacity(0.45), location: 0.72),
+                    .init(color: .black.opacity(0.1), location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
