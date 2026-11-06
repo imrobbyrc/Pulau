@@ -26,8 +26,8 @@ enum Motion {
     static var reduce: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     // Subtle spring: smooth settle, barely any overshoot.
     static var spring: Animation { reduce ? .easeInOut(duration: 0.15) : .spring(response: 0.45, dampingFraction: 0.9) }
-    // Dismiss: short ease-out so it never drags at the end.
-    static var quick: Animation { reduce ? .easeInOut(duration: 0.1) : .easeOut(duration: 0.22) }
+    // Dismiss: critically damped spring — smooth stop, no slow tail.
+    static var quick: Animation { reduce ? .easeInOut(duration: 0.1) : .spring(response: 0.28, dampingFraction: 1.0) }
 }
 
 /// Island look presets selectable from the menu; persisted per launch.
@@ -58,7 +58,12 @@ final class BannerPresenter: ObservableObject {
 
     func dismiss() {
         withAnimation(Motion.quick) { expanded = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.note = nil }
+    }
+
+    /// Clears content; call after the panel is hidden so the collapsed
+    /// island never lingers on screen.
+    func clear() {
+        note = nil
     }
 }
 
@@ -233,10 +238,11 @@ final class NotificationWatcher: ObservableObject {
             try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled else { return }
             self?.presenter.dismiss()
-            try? await Task.sleep(for: .seconds(0.45))
+            try? await Task.sleep(for: .seconds(0.3))
             guard !Task.isCancelled else { return }
             self?.panel?.contentViewController = nil
             self?.panel?.orderOut(nil)
+            self?.presenter.clear()
         }
     }
 
