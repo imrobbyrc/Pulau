@@ -285,8 +285,8 @@ struct IslandBannerView: View {
             }
             .compositingGroup()
             if #available(macOS 26.0, *) {
-                // Native Liquid Glass material, clipped to the island.
-                Color.clear.glassEffect(.regular, in: shape)
+                // Native Liquid Glass material, black-tinted, clipped to the island.
+                Color.clear.glassEffect(.regular.tint(.black), in: shape)
             } else {
                 IslandGlass().clipShape(shape)
             }
