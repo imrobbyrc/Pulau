@@ -35,6 +35,7 @@ final class BannerPresenter: ObservableObject {
     @Published private(set) var note: PulauNotification?
     @Published private(set) var expanded = false
     @Published private(set) var generation = UUID()
+    @Published var look: IslandLook = UserDefaults.standard.string(forKey: "islandLook").flatMap(IslandLook.init(rawValue:)) ?? .glassy
 
     func present(_ notification: PulauNotification) {
         note = notification
@@ -55,6 +56,12 @@ final class BannerPresenter: ObservableObject {
     }
 }
 
+/// Island look presets selectable from the menu; persisted per launch.
+enum IslandLook: String, CaseIterable {
+    case glassy
+    case solid
+}
+
 @MainActor
 final class NotificationWatcher: ObservableObject {
     @Published private(set) var isListening = false
@@ -68,6 +75,15 @@ final class NotificationWatcher: ObservableObject {
     private let presenter = BannerPresenter()
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
+
+    /// Active island look; persisted so the choice survives relaunch.
+    var look: IslandLook {
+        get { presenter.look }
+        set {
+            presenter.look = newValue
+            UserDefaults.standard.set(newValue.rawValue, forKey: "islandLook")
+        }
+    }
     // Debug: swap the island for an unconditional red rect to isolate
     // panel+hosting rendering from view logic.
     private let plainRect = ProcessInfo.processInfo.arguments.contains("--plain")
@@ -284,26 +300,29 @@ struct IslandBannerView: View {
                 shape.blendMode(.destinationOut)
             }
             .compositingGroup()
-            if #available(macOS 26.0, *) {
-                // Native Liquid Glass material, lightly black-tinted, clipped to the island.
-                Color.clear.glassEffect(.regular.tint(.black.opacity(0.45)), in: shape)
-            } else {
-                IslandGlass().clipShape(shape)
+            switch presenter.look {
+            case .glassy:
+                if #available(macOS 26.0, *) {
+                    // Native Liquid Glass material, lightly black-tinted, clipped to the island.
+                    Color.clear.glassEffect(.regular.tint(.black.opacity(0.45)), in: shape)
+                } else {
+                    IslandGlass().clipShape(shape)
+                }
+                // Glass-forward: solid notch band, then liquid glass below.
+                shape.fill(LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.28),
+                        .init(color: .black.opacity(0.55), location: 0.55),
+                        .init(color: .black.opacity(0.22), location: 0.8),
+                        .init(color: .black.opacity(0), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ))
+            case .solid:
+                shape.fill(.black)
             }
-            // Three-stage depth, glass-forward. The top band stays fully
-            // solid through the real notch height so the island reads as one
-            // with the hardware notch; glass takes over below it.
-            shape.fill(LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: 0.28),
-                    .init(color: .black.opacity(0.55), location: 0.55),
-                    .init(color: .black.opacity(0.22), location: 0.8),
-                    .init(color: .black.opacity(0), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            ))
             shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.8)
         }
         .onAppear { presenter.expandFromView() }
