@@ -35,6 +35,8 @@ public actor CodexAuth {
     private static let redirectURI = "http://localhost:1455/callback"
     private var attempt: LoopbackAttempt?
     private var signInTask: Task<CodexTokens, Error>?
+    private var refreshTask: (id: UUID, task: Task<CodexTokens, Error>)?
+    private var generation = 0
     private let keychain = CodexTokenKeychain()
     public private(set) var accountID: String?
 
@@ -47,12 +49,16 @@ public actor CodexAuth {
     }
 
     public func signOut() async throws {
+        generation += 1
         signInTask?.cancel()
-        if let attempt { await attempt.finish(.failure(CancellationError())) }
-        self.attempt = nil
+        refreshTask?.task.cancel()
+        refreshTask = nil
+        let previousAttempt = attempt
+        attempt = nil
         signInTask = nil
-        try keychain.delete()
         accountID = nil
+        try keychain.delete()
+        if let previousAttempt { await previousAttempt.finish(.failure(CancellationError())) }
     }
 
     public func accessToken(forceRefresh: Bool = false) async throws -> String {
@@ -61,18 +67,46 @@ public actor CodexAuth {
             accountID = tokens.accountID
             return tokens.accessToken
         }
-        let refreshed = try await refresh(tokens)
-        try keychain.save(refreshed)
-        accountID = refreshed.accountID
-        return refreshed.accessToken
+        let currentGeneration = generation
+        let flight: (id: UUID, task: Task<CodexTokens, Error>)
+        if let existing = refreshTask {
+            flight = existing
+        } else {
+            flight = (UUID(), Task {
+                let refreshed = try await self.refresh(tokens)
+                guard self.generation == currentGeneration else { throw CancellationError() }
+                try self.keychain.save(refreshed)
+                self.accountID = refreshed.accountID
+                return refreshed
+            })
+            refreshTask = flight
+        }
+        do {
+            let refreshed = try await flight.task.value
+            guard generation == currentGeneration else { throw CancellationError() }
+            if refreshTask?.id == flight.id { refreshTask = nil }
+            return refreshed.accessToken
+        } catch {
+            if generation == currentGeneration && refreshTask?.id == flight.id { refreshTask = nil }
+            throw error
+        }
     }
 
     public func signIn() async throws {
+        generation += 1
+        let currentGeneration = generation
         signInTask?.cancel()
-        if let attempt { await attempt.finish(.failure(CancellationError())) }
+        refreshTask?.task.cancel()
+        refreshTask = nil
+        let previousAttempt = attempt
+        attempt = nil
+        signInTask = nil
+        if let previousAttempt { await previousAttempt.finish(.failure(CancellationError())) }
+        guard generation == currentGeneration else { throw CancellationError() }
         let verifier = try Self.makeCodeVerifier()
         let state = try Self.makeCodeVerifier()
         let loopback = try await LoopbackAttempt(state: state)
+        guard generation == currentGeneration else { throw CancellationError() }
         attempt = loopback
         var url = URLComponents(string: "https://auth.openai.com/oauth/authorize")!
         url.queryItems = [
@@ -101,7 +135,7 @@ public actor CodexAuth {
             task.cancel()
         }
         try Task.checkCancellation()
-        guard attempt === loopback else { throw CancellationError() }
+        guard generation == currentGeneration, attempt === loopback else { throw CancellationError() }
         try keychain.save(tokens)
         accountID = tokens.accountID
     }
@@ -175,6 +209,20 @@ private struct JWTClaims: Decodable {
     enum CodingKeys: String, CodingKey { case auth = "https://api.openai.com/auth" }
 }
 
+struct CallbackRequestLine {
+    private var buffer = Data()
+
+    mutating func append(_ data: Data) throws -> String? {
+        buffer.append(data)
+        guard buffer.count <= 16384 else { throw CodexAuthError.invalidCallback }
+        guard let end = buffer.range(of: Data("\r\n".utf8)) else { return nil }
+        guard let line = String(data: buffer[..<end.lowerBound], encoding: .utf8) else {
+            throw CodexAuthError.invalidCallback
+        }
+        return line
+    }
+}
+
 @MainActor
 private final class LoopbackAttempt {
     private let listener: NWListener
@@ -224,11 +272,24 @@ private final class LoopbackAttempt {
 
     private func receive(_ connection: NWConnection) {
         connection.start(queue: .main)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 16384) { [weak self] data, _, _, _ in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { connection.cancel() }
+        receiveLine(connection, parser: CallbackRequestLine())
+    }
+
+    private func receiveLine(_ connection: NWConnection, parser: CallbackRequestLine) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, complete, error in
             Task { @MainActor in
-                guard let self else { connection.cancel(); return }
-                let request = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                let firstLine = request.components(separatedBy: "\r\n").first ?? ""
+                guard let self, !self.finished else { connection.cancel(); return }
+                var parser = parser
+                let firstLine: String
+                do {
+                    guard let line = try parser.append(data ?? Data()) else {
+                        if complete || error != nil { connection.cancel() }
+                        else { self.receiveLine(connection, parser: parser) }
+                        return
+                    }
+                    firstLine = line
+                } catch { connection.cancel(); return }
                 let parts = firstLine.split(separator: " ")
                 guard parts.count >= 2, parts[0] == "GET",
                       let url = URLComponents(string: "http://localhost\(parts[1])"), url.path == "/callback",
