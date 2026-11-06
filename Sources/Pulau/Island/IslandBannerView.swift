@@ -7,9 +7,9 @@ struct IslandBannerView: View {
     @ObservedObject var glm: GLMUsageStore
     private let notchWidth: CGFloat = 185
     private let notchHeight: CGFloat = 32
-    private let islandWidth: CGFloat = 400
-    private let contentHeight: CGFloat = 60
-    private let islandHeight: CGFloat = 104
+    private let islandWidth: CGFloat = 360
+    private let contentHeight: CGFloat = 52
+    private let islandHeight: CGFloat = 96
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -23,7 +23,7 @@ struct IslandBannerView: View {
         let expanded = presenter.expanded
         VStack(spacing: 0) {
             // Keep the real notch line clear so the surface reads as growing out of it.
-            Color.clear.frame(height: 16)
+            Color.clear.frame(height: 34)
             if let note = presenter.note {
                 bannerContent(note)
                     .frame(width: islandWidth - 32, height: contentHeight)
@@ -34,15 +34,15 @@ struct IslandBannerView: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: expanded ? islandWidth + 40 : notchWidth + 40,
+        .frame(width: expanded ? islandWidth : notchWidth,
                height: expanded ? islandHeight : notchHeight, alignment: .top)
         .background {
             let shape = IslandShape(radius: expanded ? 34 : 16)
             ZStack {
                 shape.fill(.black)
-                    .shadow(color: .black.opacity(0.25), radius: 12, y: 12)
+                    .shadow(color: .black.opacity(expanded ? 0.25 : 0), radius: 12, y: 12)
                 shape.fill(.black)
-                    .shadow(color: .black.opacity(0.25), radius: 5, y: 4)
+                    .shadow(color: .black.opacity(expanded ? 0.25 : 0), radius: 5, y: 4)
                 shape.blendMode(.destinationOut)
             }
             .compositingGroup()
@@ -76,37 +76,44 @@ struct IslandBannerView: View {
             case .solid:
                 shape.fill(.black)
             }
-            shape.strokeBorder(.white.opacity(presenter.look == .glassy ? 0.25 : 0.12), lineWidth: 0.8)
+            shape.strokeBorder(.white.opacity(expanded ? (presenter.look == .glassy ? 0.25 : 0.12) : 0), lineWidth: 0.8)
         }
     }
 
     private var usageContent: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
             Text("GLM")
-                .font(.system(size: 13, weight: .bold))
-                .padding(10)
-                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 3) {
+                .font(.custom("JetBrainsMono-Regular", size: 11).bold())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
                 if !glm.hasKey {
-                    Text("GLM: set API key…").font(.system(size: 14, weight: .semibold))
-                    Text("Use the Pulau menu to add your key").font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
+                    Text("GLM: set API key…")
+                        .font(.custom("JetBrainsMono-Regular", size: 12).bold())
+                    Text("Use the Pulau menu to add your key")
+                        .font(.custom("JetBrainsMono-Regular", size: 10))
+                        .foregroundStyle(.white.opacity(0.65))
                 } else if let percent = glm.fiveHourRemainingPercent {
-                    Text("5h  \(Int(percent.rounded()))% left").font(.system(size: 19, weight: .semibold))
-                    HStack {
+                    Text("5h  \(Int(percent.rounded()))% left")
+                        .font(.custom("JetBrainsMono-Regular", size: 15).bold())
+                    HStack(spacing: 8) {
                         if let weekly = glm.weeklyRemainingPercent {
                             Text("Weekly \(Int(weekly.rounded()))% left")
                         }
                         if let plan = glm.planName { Text(plan) }
-                    }.font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
+                    }
+                    .font(.custom("JetBrainsMono-Regular", size: 10))
+                    .foregroundStyle(.white.opacity(0.65))
                 } else {
                     Text(glm.error ?? (glm.loading ? "Loading usage…" : "Usage unavailable"))
-                        .font(.system(size: 13))
+                        .font(.custom("JetBrainsMono-Regular", size: 11))
                 }
             }
             Spacer(minLength: 0)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .preferredColorScheme(.dark)
     }
 

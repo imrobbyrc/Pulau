@@ -140,8 +140,8 @@ final class NotificationWatcher: ObservableObject {
     private func updatePointer() {
         guard let panel else { return }
         let frame = panel.frame
-        let width: CGFloat = presenter.expanded ? 440 : 225
-        let height: CGFloat = presenter.expanded ? 104 : 32
+        let width: CGFloat = presenter.expanded ? 360 : 185
+        let height: CGFloat = presenter.expanded ? 96 : 32
         let rect = NSRect(x: frame.midX - width / 2, y: frame.maxY - height,
                           width: width, height: height).insetBy(dx: -4, dy: -4)
         let inside = rect.contains(NSEvent.mouseLocation)
