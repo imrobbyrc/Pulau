@@ -11,6 +11,11 @@ final class NotificationWatcher: ObservableObject {
     private let presenter = BannerPresenter()
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
+    private var hoverTask: Task<Void, Never>?
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private let glm: GLMUsageStore
+    private var pointerInside = false
 
     /// Active island look; persisted so the choice survives relaunch.
     /// Published so the menu checkmark follows immediately.
@@ -24,8 +29,10 @@ final class NotificationWatcher: ObservableObject {
     // panel+hosting rendering from view logic.
     private let plainRect = ProcessInfo.processInfo.arguments.contains("--plain")
 
-    init() {
+    init(glm: GLMUsageStore) {
+        self.glm = glm
         presenter.look = look
+        DispatchQueue.main.async { [weak self] in self?.showIsland() }
         // Debug affordance: run the binary with --test-banner to flash a
         // banner and quit, so capture can be checked without UI scripting.
         if ProcessInfo.processInfo.arguments.contains("--test-banner") {
@@ -83,8 +90,7 @@ final class NotificationWatcher: ObservableObject {
         timer = nil
         dismissTask?.cancel()
         presenter.dismiss()
-        panel?.contentViewController = nil
-        panel?.orderOut(nil)
+        presenter.clear()
         capture.stop()
         status = "Off"
     }
@@ -104,25 +110,64 @@ final class NotificationWatcher: ObservableObject {
         status = capture.status
     }
 
-    private func show(_ notification: PulauNotification) {
+    private func showIsland() {
+        guard panel == nil else { return }
         let width: CGFloat = 440
         let height: CGFloat = 190
-        let panel = panel ?? makePanel(width: width, height: height)
+        let panel = makePanel(width: width, height: height)
         self.panel = panel
-        if panel.contentViewController == nil {
-            let controller = NSHostingController(rootView: plainRect
-                ? AnyView(Rectangle().fill(.red).frame(width: 440, height: 160))
-                : AnyView(IslandBannerView(presenter: presenter).frame(width: width, height: height, alignment: .top)))
-            controller.sizingOptions = []
-            panel.contentViewController = controller
-            panel.setContentSize(NSSize(width: width, height: height))
-        }
+        let controller = NSHostingController(rootView: plainRect
+            ? AnyView(Rectangle().fill(.red).frame(width: 440, height: 160))
+            : AnyView(IslandBannerView(presenter: presenter, glm: glm).frame(width: width, height: height, alignment: .top)))
+        controller.sizingOptions = []
+        panel.contentViewController = controller
+        panel.setContentSize(NSSize(width: width, height: height))
         if let screen = NSScreen.main {
             // The fixed-size panel stays pinned while only its contents animate.
             panel.setFrameTopLeftPoint(NSPoint(x: screen.frame.midX - panel.frame.width / 2, y: screen.frame.maxY))
         }
         panel.orderFrontRegardless()
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]) { [weak self] _ in
+            Task { @MainActor in self?.updatePointer() }
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]) { [weak self] event in
+            self?.updatePointer()
+            return event
+        }
+        updatePointer()
+    }
+
+    private func updatePointer() {
+        guard let panel else { return }
+        let frame = panel.frame
+        let width: CGFloat = presenter.expanded ? 440 : 225
+        let height: CGFloat = presenter.expanded ? 104 : 32
+        let rect = NSRect(x: frame.midX - width / 2, y: frame.maxY - height,
+                          width: width, height: height).insetBy(dx: -4, dy: -4)
+        let inside = rect.contains(NSEvent.mouseLocation)
+        panel.ignoresMouseEvents = !inside
+        guard inside != pointerInside else { return }
+        pointerInside = inside
+        hoverTask?.cancel()
+        if inside {
+            presenter.setHovered(true)
+        } else {
+            hoverTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(0.5))
+                guard !Task.isCancelled else { return }
+                self?.presenter.setHovered(false)
+            }
+        }
+    }
+
+    private func show(_ notification: PulauNotification) {
+        showIsland()
         presenter.present(notification)
+        let generation = presenter.generation
+        DispatchQueue.main.async { [weak self] in
+            guard let presenter = self?.presenter, presenter.generation == generation else { return }
+            presenter.expandFromView()
+        }
         dismissTask?.cancel()
         dismissTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(6))
@@ -132,9 +177,8 @@ final class NotificationWatcher: ObservableObject {
             self.presenter.dismiss(duration: duration)
             try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled else { return }
-            self.panel?.orderOut(nil)
-            self.panel?.contentViewController = nil
             self.presenter.clear()
+            self.updatePointer()
         }
     }
 
@@ -145,6 +189,7 @@ final class NotificationWatcher: ObservableObject {
             backing: .buffered,
             defer: false
         )
+        panel.ignoresMouseEvents = true
         panel.isOpaque = false
         panel.hasShadow = false
         panel.animationBehavior = .none

@@ -3,8 +3,14 @@ import SwiftUI
 
 @main
 struct PulauApp: App {
-    @StateObject private var notifications = NotificationWatcher()
-    @StateObject private var glm = GLMUsageStore()
+    @StateObject private var notifications: NotificationWatcher
+    @StateObject private var glm: GLMUsageStore
+
+    init() {
+        let store = GLMUsageStore()
+        _glm = StateObject(wrappedValue: store)
+        _notifications = StateObject(wrappedValue: NotificationWatcher(glm: store))
+    }
 
     var body: some Scene {
         MenuBarExtra("Pulau", systemImage: "bell.badge") {

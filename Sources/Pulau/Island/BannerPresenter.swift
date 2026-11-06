@@ -23,6 +23,7 @@ final class BannerPresenter: ObservableObject {
     @Published private(set) var note: PulauNotification?
     @Published private(set) var expanded = false
     @Published private(set) var generation = UUID()
+    private(set) var hovered = false
     @Published var look: IslandLook = UserDefaults.standard.string(forKey: "islandLook").flatMap(IslandLook.init(rawValue:)) ?? .glassy
 
     func present(_ notification: PulauNotification) {
@@ -31,21 +32,24 @@ final class BannerPresenter: ObservableObject {
         generation = UUID()
     }
 
-    /// Expand from the view's onAppear so the first render is the collapsed
-    /// notch and the spring animates from there.
     func expandFromView() {
         guard !expanded else { return }
         withAnimation(Motion.spring) { expanded = true }
+    }
+
+    func setHovered(_ value: Bool) {
+        hovered = value
+        guard note == nil else { return }
+        if value { expandFromView() } else { dismiss() }
     }
 
     func dismiss(duration: Double = Motion.dismissDuration) {
         withAnimation(Motion.quick(duration: duration)) { expanded = false }
     }
 
-    /// Clears content; call after the panel is hidden so the collapsed
-    /// island never lingers on screen.
     func clear() {
         note = nil
+        if hovered { expandFromView() }
     }
 }
 
