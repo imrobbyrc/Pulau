@@ -50,7 +50,7 @@ struct IslandBannerView: View {
             case .glassy:
                 if #available(macOS 26.0, *) {
                     // Native Liquid Glass material, lightly black-tinted, clipped to the island.
-                    Color.clear.glassEffect(.regular.tint(.black.opacity(0.2)), in: shape)
+                    Color.clear.glassEffect(.regular.interactive(), in: shape)
                 } else {
                     IslandGlass().clipShape(shape)
                 }
@@ -76,7 +76,7 @@ struct IslandBannerView: View {
             case .solid:
                 shape.fill(.black)
             }
-            shape.strokeBorder(.white.opacity(presenter.look == .glassy ? 0.15 : 0.12), lineWidth: 0.8)
+            shape.strokeBorder(.white.opacity(presenter.look == .glassy ? 0.25 : 0.12), lineWidth: 0.8)
         }
         .onAppear { presenter.expandFromView() }
     }
