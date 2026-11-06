@@ -4,6 +4,7 @@ import SwiftUI
 /// The rounded island grows from the notch and shrinks before the panel hides.
 struct IslandBannerView: View {
     @ObservedObject var presenter: BannerPresenter
+    @ObservedObject var glm: GLMUsageStore
     private let notchWidth: CGFloat = 185
     private let notchHeight: CGFloat = 32
     private let islandWidth: CGFloat = 400
@@ -12,11 +13,7 @@ struct IslandBannerView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            if presenter.note != nil {
-                surface
-                    .id(presenter.generation)
-                    .transition(.opacity)
-            }
+            surface
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -31,6 +28,9 @@ struct IslandBannerView: View {
                 bannerContent(note)
                     .frame(width: islandWidth - 32, height: contentHeight)
                     .opacity(expanded ? 1 : 0)
+            } else if expanded {
+                usageContent
+                    .frame(width: islandWidth - 32, height: contentHeight)
                     .transition(.opacity)
             }
         }
@@ -78,7 +78,36 @@ struct IslandBannerView: View {
             }
             shape.strokeBorder(.white.opacity(presenter.look == .glassy ? 0.25 : 0.12), lineWidth: 0.8)
         }
-        .onAppear { presenter.expandFromView() }
+    }
+
+    private var usageContent: some View {
+        HStack(spacing: 14) {
+            Text("GLM")
+                .font(.system(size: 13, weight: .bold))
+                .padding(10)
+                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                if !glm.hasKey {
+                    Text("GLM: set API key…").font(.system(size: 14, weight: .semibold))
+                    Text("Use the Pulau menu to add your key").font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
+                } else if let percent = glm.fiveHourRemainingPercent {
+                    Text("5h  \(Int(percent.rounded()))% left").font(.system(size: 19, weight: .semibold))
+                    HStack {
+                        if let weekly = glm.weeklyRemainingPercent {
+                            Text("Weekly \(Int(weekly.rounded()))% left")
+                        }
+                        if let plan = glm.planName { Text(plan) }
+                    }.font(.system(size: 11)).foregroundStyle(.white.opacity(0.65))
+                } else {
+                    Text(glm.error ?? (glm.loading ? "Loading usage…" : "Usage unavailable"))
+                        .font(.system(size: 13))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16)
+        .preferredColorScheme(.dark)
     }
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
