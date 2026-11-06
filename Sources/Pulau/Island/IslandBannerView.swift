@@ -55,14 +55,14 @@ struct IslandBannerView: View {
                     IslandGlass().clipShape(shape)
                 }
                 // Opaque through the notch band, then a seamless fade into the
-                // native glass below — no hard cut line.
+                // native glass below — fade starts exactly at the notch bottom.
                 shape.fill(.black)
                     .mask(
                         LinearGradient(
                             stops: [
                                 .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.22),
-                                .init(color: .black.opacity(0), location: 0.5),
+                                .init(color: .black, location: 0.31),
+                                .init(color: .black.opacity(0), location: 0.62),
                             ],
                             startPoint: .top,
                             endPoint: .bottom
