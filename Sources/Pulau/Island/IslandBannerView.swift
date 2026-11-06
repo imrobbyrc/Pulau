@@ -78,6 +78,11 @@ struct IslandBannerView: View {
             }
             shape.strokeBorder(.white.opacity(presenter.look == .glassy ? 0.25 : 0.12), lineWidth: 0.8)
         }
+        .overlay {
+            if presenter.look == .glassy, expanded {
+                EdgeGlow(shape: IslandShape(radius: 34))
+            }
+        }
         .onAppear { presenter.expandFromView() }
     }
 
@@ -174,5 +179,57 @@ struct IslandShape: InsettableShape {
                    control2: CGPoint(x: rect.minX + flare * k, y: rect.minY))
         p.closeSubpath()
         return p
+    }
+}
+
+/// Siri-style animated edge glow: a slowly rotating conic gradient stroked
+/// around the island silhouette, breathing opacity, with a blurred inner
+/// emission for bloom. Static under Reduce Motion. Technique adapted from
+/// AkashKundu03/SwiftUI-BreathingScreen (MIT).
+struct EdgeGlow: View {
+    let shape: IslandShape
+    var breathePeriod: Double = 5
+    var rotationPeriod: Double = 9
+
+    private static let stops: [Gradient.Stop] = [
+        .init(color: Color(red: 0.78, green: 0.53, blue: 1.0), location: 0.0),
+        .init(color: Color(red: 0.55, green: 0.6, blue: 1.0), location: 0.3),
+        .init(color: Color(red: 0.96, green: 0.73, blue: 0.92), location: 0.45),
+        .init(color: Color(red: 1.0, green: 0.4, blue: 0.47), location: 0.62),
+        .init(color: Color(red: 1.0, green: 0.73, blue: 0.44), location: 0.75),
+        .init(color: Color(red: 0.78, green: 0.53, blue: 1.0), location: 1.0),
+    ]
+
+    var body: some View {
+        if Motion.reduce {
+            coreStroke(gradient: AngularGradient(gradient: Gradient(stops: Self.stops), center: .center))
+        } else {
+            TimelineView(.animation) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let phase = 0.5 + 0.5 * sin(2 * .pi * (t / breathePeriod))
+                let angle = (t.truncatingRemainder(dividingBy: rotationPeriod) / rotationPeriod) * 360
+                coreStroke(
+                    gradient: AngularGradient(
+                        gradient: Gradient(stops: Self.stops),
+                        center: .center,
+                        angle: .degrees(angle)
+                    )
+                )
+                .opacity(0.35 + 0.3 * phase)
+            }
+        }
+    }
+
+    private func coreStroke(gradient: AngularGradient) -> some View {
+        let core = shape.inset(by: 1).stroke(gradient, lineWidth: 2)
+        let inner = shape
+            .inset(by: 2)
+            .stroke(gradient, lineWidth: 8)
+            .blur(radius: 7)
+            .blendMode(.plusLighter)
+            .clipShape(shape.inset(by: 2))
+        return ZStack { core; inner }
+            .compositingGroup()
+            .allowsHitTesting(false)
     }
 }
