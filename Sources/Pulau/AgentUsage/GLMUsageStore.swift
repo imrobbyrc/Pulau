@@ -4,9 +4,11 @@ import Security
 import UserNotifications
 
 private actor GLMKeychain {
+    // Legacy login keychain: data-protection keychain fails with
+    // errSecMissingEntitlement (-34018) for this app's signing context.
     private var query: [CFString: Any] {
         [kSecClass: kSecClassGenericPassword, kSecAttrService: "com.robby.Pulau.glm",
-         kSecAttrAccount: "api-key", kSecUseDataProtectionKeychain: true]
+         kSecAttrAccount: "api-key"]
     }
     func load() throws -> String? {
         var q = query
