@@ -30,6 +30,12 @@ enum Motion {
     static var quick: Animation { reduce ? .easeInOut(duration: 0.1) : .easeOut(duration: 0.22) }
 }
 
+/// Island look presets selectable from the menu; persisted per launch.
+enum IslandLook: String, CaseIterable {
+    case glassy
+    case solid
+}
+
 @MainActor
 final class BannerPresenter: ObservableObject {
     @Published private(set) var note: PulauNotification?
@@ -56,12 +62,6 @@ final class BannerPresenter: ObservableObject {
     }
 }
 
-/// Island look presets selectable from the menu; persisted per launch.
-enum IslandLook: String, CaseIterable {
-    case glassy
-    case solid
-}
-
 @MainActor
 final class NotificationWatcher: ObservableObject {
     @Published private(set) var isListening = false
@@ -77,11 +77,11 @@ final class NotificationWatcher: ObservableObject {
     private var dismissTask: Task<Void, Never>?
 
     /// Active island look; persisted so the choice survives relaunch.
-    var look: IslandLook {
-        get { presenter.look }
-        set {
-            presenter.look = newValue
-            UserDefaults.standard.set(newValue.rawValue, forKey: "islandLook")
+    /// Published so the menu checkmark follows immediately.
+    @Published var look: IslandLook = UserDefaults.standard.string(forKey: "islandLook").flatMap(IslandLook.init(rawValue:)) ?? .glassy {
+        didSet {
+            presenter.look = look
+            UserDefaults.standard.set(look.rawValue, forKey: "islandLook")
         }
     }
     // Debug: swap the island for an unconditional red rect to isolate
@@ -89,6 +89,7 @@ final class NotificationWatcher: ObservableObject {
     private let plainRect = ProcessInfo.processInfo.arguments.contains("--plain")
 
     init() {
+        presenter.look = look
         // Debug affordance: run the binary with --test-banner to flash a
         // banner and quit, so capture can be checked without UI scripting.
         if ProcessInfo.processInfo.arguments.contains("--test-banner") {
@@ -263,7 +264,7 @@ struct IslandBannerView: View {
     private let notchHeight: CGFloat = 32
     private let islandWidth: CGFloat = 400
     private let contentHeight: CGFloat = 60
-    private let islandHeight: CGFloat = 128
+    private let islandHeight: CGFloat = 104
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -294,7 +295,7 @@ struct IslandBannerView: View {
             let shape = IslandShape(radius: expanded ? 34 : 16)
             ZStack {
                 shape.fill(.black)
-                    .shadow(color: .black.opacity(0.45), radius: 17, y: 20)
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 12)
                 shape.fill(.black)
                     .shadow(color: .black.opacity(0.25), radius: 5, y: 4)
                 shape.blendMode(.destinationOut)
