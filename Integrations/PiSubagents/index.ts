@@ -12,10 +12,38 @@ export default function (pi: ExtensionAPI) {
   let sessionEnabled = true;
   let globalEnabled = true;
   let preferenceTimer: ReturnType<typeof setInterval> | undefined;
+  let activityTimer: ReturnType<typeof setInterval> | undefined;
+  let subagents: { status(): unknown } | undefined;
   const configPath = join(homedir(), ".config", "pulau", "pi-subagents.json");
   const reporter = new Reporter((sequence) => {
     if (!reportingIssue(active, Boolean(process.stdout.isTTY), process.env)) process.stdout.write(sequence);
   });
+
+  // Best effort: poll the subagent manager for live tool activity when the package resolves.
+  void (async () => {
+    for (const specifier of ["@imrobbyrc/pi-core-subagent", "pi-core-subagent"]) {
+      try {
+        const mod = await import(specifier);
+        subagents = mod.createSubagentController(pi);
+        return;
+      } catch {}
+    }
+  })();
+
+  function pollActivity() {
+    if (!subagents) return;
+    try {
+      const runs = subagents.status() as Array<{ id?: unknown; tasks?: Array<{ id?: unknown; status?: unknown; lastActivity?: unknown }> }>;
+      for (const run of runs ?? []) {
+        if (typeof run?.id !== "string" || !Array.isArray(run.tasks)) continue;
+        for (const task of run.tasks) {
+          if (task.status === "running" && typeof task.lastActivity === "string") {
+            reporter.setActivity(run.id, task.id, task.lastActivity);
+          }
+        }
+      }
+    } catch {}
+  }
 
   function syncGlobal() {
     globalEnabled = readGlobalEnabled(configPath);
@@ -52,6 +80,8 @@ export default function (pi: ExtensionAPI) {
       reporter.setModel(ctx.model?.provider, ctx.model?.id);
       preferenceTimer = setInterval(syncGlobal, 1000);
       preferenceTimer.unref();
+      activityTimer = setInterval(pollActivity, 1500);
+      activityTimer.unref();
     }
   });
   pi.on("model_select", (event) => {
@@ -60,6 +90,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", () => {
     if (preferenceTimer) clearInterval(preferenceTimer);
     preferenceTimer = undefined;
+    if (activityTimer) clearInterval(activityTimer);
+    activityTimer = undefined;
     if (active) reporter.clear();
     active = false;
   });

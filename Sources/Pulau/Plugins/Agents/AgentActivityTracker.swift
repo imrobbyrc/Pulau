@@ -17,7 +17,7 @@ struct AgentActivityTracker {
             uncertain = false
             return AgentActivityUpdate(working: [], completed: [])
         }
-        let working = snapshot.reports.filter { $0.state == .working }
+        let working = snapshot.reports.filter { $0.state == .working || $0.state == .blocked }
         visibleWorking = Dictionary(working.compactMap { report in report.identity.map { ($0, report) } }, uniquingKeysWith: { _, last in last })
         guard snapshot.connection == .connected else {
             uncertain = true
@@ -48,7 +48,7 @@ struct AgentActivityTracker {
         let old = previous?[id]?.state
         if previous == nil { previous = [:] }
         previous?[id] = report
-        if report.state == .working { visibleWorking[id] = report }
+        if report.state == .working || report.state == .blocked { visibleWorking[id] = report }
         else { visibleWorking.removeValue(forKey: id) }
         let completed = report.state == .done && (old == .working || old == .blocked) ? [report] : []
         return AgentActivityUpdate(working: Array(visibleWorking.values), completed: completed)

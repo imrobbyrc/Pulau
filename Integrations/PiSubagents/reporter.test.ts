@@ -21,6 +21,20 @@ describe("Pi subagent status reporter", () => {
     expect(output[3]).toContain("state=clear:");
   });
 
+  test("tool activity overrides the task title while working", () => {
+    const output: string[] = [];
+    const reporter = new Reporter((value) => output.push(value));
+    reporter.update("run", "task", "running", "Refactor login");
+    reporter.setActivity("run", "task", "Read Sources/Auth.swift");
+    expect(Buffer.from(output[1].match(/:msg=([^\x1b]+)/)![1], "base64").toString()).toBe("Read Sources/Auth.swift");
+    reporter.setActivity("run", "task", "Read Sources/Auth.swift");
+    expect(output).toHaveLength(2);
+    reporter.setActivity("run", "task", "Edit Sources/Auth.swift");
+    expect(Buffer.from(output[2].match(/:msg=([^\x1b]+)/)![1], "base64").toString()).toBe("Edit Sources/Auth.swift");
+    reporter.update("run", "task", "completed");
+    expect(output[3]).not.toContain(":msg=");
+  });
+
   test("sends bounded first line safely and removes it on completion", () => {
     const output: string[] = [];
     const reporter = new Reporter((value) => output.push(value));

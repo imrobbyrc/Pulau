@@ -7,7 +7,7 @@ final class RexAgentStoreTests: XCTestCase {
         let status = try JSONDecoder().decode(RexClient.Status.self, from: data)
         let process = RexClient.Foreground(name: "node", argv0: "node", script: "/example/claude.js")
         XCTAssertEqual(RexClient.reportsForBlock(status: status, foreground: process), [
-            RexAgentReport(agent: .pi, state: .blocked),
+            RexAgentReport(agent: .pi, state: .blocked, actionQuestion: "private"),
             RexAgentReport(agent: .codex, state: .unknown),
             RexAgentReport(agent: .claude, state: .unknown),
         ])
@@ -29,6 +29,16 @@ final class RexAgentStoreTests: XCTestCase {
         XCTAssertEqual(reports, [RexAgentReport(agent: .pi, state: .working, identity: "s|b|Pi", model: "anthropic/claude-sonnet")])
         let event = Data(#"{"type":"session_event","payload":{"session_id":"s","event":{"type":"block_event","payload":{"block_id":"b","name":"program_status_changed","payload":{"id":"pulau-subagents/model","record":{"app":"pi","state":"idle","msg":"anthropic/claude-sonnet"}}}}}}"#.utf8)
         XCTAssertNil(try JSONDecoder().decode(RexEvent.self, from: event).statusReport)
+    }
+
+    func testRootBlockedCarriesQuestionForNeedsInput() throws {
+        let data = Data(#"{"records":[{"app":"pi","state":"blocked","msg":"Run the database migrations?"},{"app":"codex","state":"working"}]}"#.utf8)
+        let status = try JSONDecoder().decode(RexClient.Status.self, from: data)
+        let reports = RexClient.reportsForBlock(status: status, foreground: nil)
+        XCTAssertEqual(reports.first { $0.agent == .pi }?.actionQuestion, "Run the database migrations?")
+        XCTAssertNil(reports.first { $0.agent == .codex }?.actionQuestion)
+        let event = Data(#"{"type":"session_event","payload":{"session_id":"s","event":{"type":"block_event","payload":{"block_id":"b","name":"program_status_changed","payload":{"id":"","record":{"app":"pi","state":"blocked","msg":"Approve push?"}}}}}}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(RexEvent.self, from: event).statusReport?.actionQuestion, "Approve push?")
     }
 
     func testOnlyWorkingPluginChildrenExposeSanitizedTaskTitles() throws {

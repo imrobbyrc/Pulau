@@ -35,6 +35,11 @@ struct QuotaAlert {
     let remaining: Int
 }
 
+struct AgentActionRequest: Equatable {
+    let agent: String
+    let question: String
+}
+
 struct AgentActivity: Equatable {
     enum Stage { case working, done }
     let stage: Stage
@@ -45,6 +50,8 @@ struct AgentActivity: Equatable {
     let piModels: [String]
     let hasPiSession: Bool
     let hasUnknownPiModel: Bool
+    /// Root agent waiting on the user, with the dialog question.
+    let action: AgentActionRequest?
 
     init(stage: Stage, reports: [RexAgentReport]) {
         self.stage = stage
@@ -61,6 +68,11 @@ struct AgentActivity: Equatable {
         hasPiSession = !sessions.isEmpty
         hasUnknownPiModel = sessions.contains { $0.model == nil }
         piModels = Array(Set(sessions.compactMap(\.model))).sorted()
+        if let waiting = reports.first(where: { !$0.isSubagent && $0.state == .blocked && $0.actionQuestion != nil }) {
+            action = AgentActionRequest(agent: waiting.agent.rawValue, question: waiting.actionQuestion ?? "")
+        } else {
+            action = nil
+        }
         details = RexAgent.allCases.flatMap { agent in
             [false, true].compactMap { subagent in
                 let count = reports.filter { $0.agent == agent && $0.isSubagent == subagent }.count
@@ -92,6 +104,7 @@ final class BannerPresenter: ObservableObject {
     private var activeAgentDone: AgentActivity?
     private var activityTimer: Task<Void, Never>?
     private var activityGeneration = UUID()
+    private var lastActionQuestion: String?
     @Published var look: IslandLook = UserDefaults.standard.string(forKey: "islandLook").flatMap(IslandLook.init(rawValue:)) ?? .glassy
 
     func present(_ notification: PulauNotification, quotaAlert: QuotaAlert? = nil) {
@@ -150,6 +163,7 @@ final class BannerPresenter: ObservableObject {
     private func applyAgentActivity(_ update: AgentActivityUpdate) {
         let wasWorking = !workingAgents.isEmpty
         workingAgents = update.working
+        presentActionIfNeeded()
         if !wasWorking && !workingAgents.isEmpty {
             pendingAgentDone.removeAll()
             if activeAgentDone != nil {
@@ -162,6 +176,19 @@ final class BannerPresenter: ObservableObject {
             pendingAgentDone.append(AgentActivity(stage: .done, reports: update.completed))
         }
         updateAgentPresentation()
+    }
+
+    /// Surfaces a needs-input banner the first time a question appears; repeats
+    /// only when the question text changes.
+    private func presentActionIfNeeded() {
+        guard let activity = workingAgents.isEmpty ? nil : AgentActivity(stage: .working, reports: workingAgents),
+              let action = activity.action else {
+            lastActionQuestion = nil
+            return
+        }
+        guard action.question != lastActionQuestion, note == nil else { return }
+        lastActionQuestion = action.question
+        present(PulauNotification(app: action.agent, title: "Needs your input", body: action.question))
     }
 
     private func updateAgentPresentation() {

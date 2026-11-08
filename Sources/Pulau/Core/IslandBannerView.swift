@@ -185,12 +185,10 @@ struct IslandBannerView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: group.title ?? name)
                     .font(.mono(12, weight: .semibold)).lineLimit(2)
-                Text("\(group.title == nil ? "" : name + " · ")\(count > 1 ? "\(count) agents" : "1 agent")")
+                Text(verbatim: name)
                     .font(.mono(10)).foregroundStyle(.white.opacity(0.6))
                 if let model = group.model {
-                    Text(verbatim: model).font(.mono(10)).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
-                } else if group.agent == .pi && !group.isSubagent {
-                    Text("Model unavailable").font(.mono(10)).foregroundStyle(.white.opacity(0.5))
+                    Text(verbatim: model).font(.mono(10)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                 }
             }
             Spacer(minLength: 0)

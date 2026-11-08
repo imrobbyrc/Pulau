@@ -133,6 +133,24 @@ final class AgentActivityTests: XCTestCase {
         XCTAssertTrue(tracker.update(RexSnapshot(connection: .connected, reports: [report("child", .done, .pi, child: true)])).completed.isEmpty)
     }
 
+    @MainActor
+    func testNeedsInputQuestionBannersOncePerQuestion() {
+        let presenter = BannerPresenter()
+        let blocked = RexAgentReport(agent: .pi, state: .blocked, actionQuestion: "Run migrations?")
+        presenter.updateAgentActivity(RexSnapshot(connection: .connected, reports: [blocked]))
+        XCTAssertEqual(presenter.note?.title, "Needs your input")
+        XCTAssertEqual(presenter.note?.body, "Run migrations?")
+        presenter.clear()
+        let generation = presenter.generation
+        presenter.updateAgentActivity(RexSnapshot(connection: .connected, reports: [blocked]))
+        XCTAssertEqual(presenter.generation, generation)
+        let changed = RexAgentReport(agent: .pi, state: .blocked, actionQuestion: "Approve push?")
+        presenter.updateAgentActivity(RexSnapshot(connection: .connected, reports: [changed]))
+        XCTAssertNotEqual(presenter.generation, generation)
+        XCTAssertEqual(presenter.note?.body, "Approve push?")
+        presenter.clear()
+    }
+
     func testDetailsCloseWhenWorkEndsOrNotificationArrives() {
         let presenter = BannerPresenter()
         presenter.updateAgentActivity(RexSnapshot(connection: .connected, reports: [report("a", .working)]))

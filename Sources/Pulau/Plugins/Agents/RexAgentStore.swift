@@ -28,14 +28,18 @@ struct RexAgentReport: Equatable {
     let identity: String?
     let taskTitle: String?
     let model: String?
+    /// Question text when this root agent waits on the user (state blocked with a dialog title).
+    let actionQuestion: String?
 
-    init(agent: RexAgent, state: RexAgentState, isSubagent: Bool = false, identity: String? = nil, taskTitle: String? = nil, model: String? = nil) {
+    init(agent: RexAgent, state: RexAgentState, isSubagent: Bool = false, identity: String? = nil,
+         taskTitle: String? = nil, model: String? = nil, actionQuestion: String? = nil) {
         self.agent = agent
         self.state = state
         self.isSubagent = isSubagent
         self.identity = identity
         self.taskTitle = taskTitle
         self.model = model
+        self.actionQuestion = actionQuestion
     }
 }
 
@@ -217,6 +221,7 @@ enum RexClient {
 
     static func reportsForBlock(status: Status, foreground: Foreground?, scope: String? = nil) -> [RexAgentReport] {
         var found: [RexAgent: RexAgentState] = [:]
+        var questions: [RexAgent: String] = [:]
         var subagents: [RexAgentReport] = []
         var childIDs = Set<String>()
         let piModel = status.records.first { $0.id == "pulau-subagents/model" && RexAgent.identify($0.effective_app ?? $0.app) == .pi }?.taskTitle
@@ -231,6 +236,9 @@ enum RexClient {
                 }
                 continue
             }
+            if state == .blocked, record.state == "blocked", let question = record.taskTitle {
+                questions[agent] = question
+            }
             if let previous = found[agent],
                let oldPriority = RexAgentState.allCases.firstIndex(of: previous),
                let newPriority = RexAgentState.allCases.firstIndex(of: state), oldPriority <= newPriority { continue }
@@ -241,7 +249,7 @@ enum RexClient {
            found[agent] == nil { found[agent] = .unknown }
         return RexAgent.allCases.compactMap { agent in
             found[agent].map { RexAgentReport(agent: agent, state: $0, identity: scope.map { "\($0)|\(agent.rawValue)" },
-                                               model: agent == .pi ? piModel : nil) }
+                                               model: agent == .pi ? piModel : nil, actionQuestion: questions[agent]) }
         } + subagents
     }
 }
@@ -409,7 +417,8 @@ struct RexEvent: Decodable {
         let suffix = child ? (id ?? agent.rawValue) : agent.rawValue
         return RexAgentReport(agent: agent, state: RexAgentState(rawValue: record.state) ?? .unknown,
                               isSubagent: child, identity: "\(session)|\(blockID)|\(suffix)",
-                              taskTitle: child && record.state == "working" ? record.taskTitle : nil)
+                              taskTitle: child && record.state == "working" ? record.taskTitle : nil,
+                              actionQuestion: !child && record.state == "blocked" ? record.taskTitle : nil)
     }
 
     var removal: (scope: String, ids: [String])? {

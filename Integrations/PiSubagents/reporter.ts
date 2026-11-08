@@ -22,15 +22,30 @@ export class Reporter {
   private enabled = true;
   private readonly states = new Map<string, Status>();
   private readonly titles = new Map<string, string>();
+  private readonly activities = new Map<string, string>();
   private model?: string;
   constructor(private readonly write: (sequence: string) => void) {}
 
   get isEnabled(): boolean { return this.enabled; }
 
+  static sanitize(text: string): string {
+    return Array.from(text.split(/[\r\n]/, 1)[0].replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").trim()).slice(0, 80).join("");
+  }
+
   private send(state: Status | "clear", id: string): void {
-    const title = state === "working" ? this.titles.get(id) : undefined;
+    const title = state === "working" ? (this.activities.get(id) ?? this.titles.get(id)) : undefined;
     const message = title ? `:msg=${Buffer.from(title, "utf8").toString("base64")}` : "";
     this.write(`\x1b]7501;state=${state}:id=${id}${state === "clear" ? "" : ":app=pi"}${message}\x1b\\`);
+  }
+
+  /// Re-sends a working subagent with its current tool activity (e.g. "Read file x").
+  setActivity(runId: unknown, taskId: unknown, activity: unknown): void {
+    if (typeof runId !== "string" || typeof taskId !== "string" || typeof activity !== "string") return;
+    const id = childId(runId, taskId);
+    const text = Reporter.sanitize(activity);
+    if (!text || this.activities.get(id) === text) return;
+    this.activities.set(id, text);
+    if (this.states.get(id) === "working" && this.enabled) this.send("working", id);
   }
 
   setModel(provider: unknown, id: unknown): void {
@@ -52,11 +67,14 @@ export class Reporter {
     const id = childId(runId, taskId);
     const previousTitle = this.titles.get(id);
     if (typeof task === "string") {
-      const title = Array.from(task.split(/[\r\n]/, 1)[0].replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").trim()).slice(0, 80).join("");
+      const title = Reporter.sanitize(task);
       if (title) this.titles.set(id, title);
       else this.titles.delete(id);
     }
-    if (["completed", "failed", "aborted"].includes(status)) this.titles.delete(id);
+    if (["completed", "failed", "aborted"].includes(status)) {
+      this.titles.delete(id);
+      this.activities.delete(id);
+    }
     const state = stateFor(status);
     if (!state) {
       if (this.states.delete(id) && this.enabled) this.send("clear", id);
@@ -81,6 +99,7 @@ export class Reporter {
     this.send("clear", prefix);
     this.states.clear();
     this.titles.clear();
+    this.activities.clear();
     this.model = undefined;
   }
 }
