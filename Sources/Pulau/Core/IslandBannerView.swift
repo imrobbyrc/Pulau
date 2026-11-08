@@ -388,6 +388,19 @@ struct QuotaLiquidAlert: View {
 
     static let duration = 2.0
     static let diameter: CGFloat = 23.04
+    static let bubbleWidth: CGFloat = 28
+    static let bubbleHeight: CGFloat = 20
+    static let bubbleRadius: CGFloat = 7
+
+    private static var bubbleRect: CGRect {
+        CGRect(x: 0, y: (32 - bubbleHeight) / 2, width: bubbleWidth, height: bubbleHeight)
+    }
+
+    private static func bubblePath(centerX: CGFloat) -> Path {
+        var rect = bubbleRect
+        rect.origin.x = centerX - bubbleWidth / 2
+        return Path(roundedRect: rect, cornerSize: CGSize(width: bubbleRadius, height: bubbleRadius), style: .continuous)
+    }
     static let detailWidth: CGFloat = 320
     static let detailY: CGFloat = 43
     static let tailHeight: CGFloat = 16
@@ -425,9 +438,9 @@ struct QuotaLiquidAlert: View {
 
     static func bridge(circleX: CGFloat, notchWidth: CGFloat) -> Path {
         let start = 220 + notchWidth / 2 - 20
-        let end = circleX - diameter / 2 + 7
+        let end = circleX - bubbleWidth / 2 + 6
         let gap = end - start
-        let finalGap = restingX(notchWidth: notchWidth) - diameter / 2 + 7 - start
+        let finalGap = restingX(notchWidth: notchWidth) - bubbleWidth / 2 + 6 - start
         let breakGap = finalGap * 0.88
         let pinchStart = breakGap * 0.75
         guard gap > 0, gap < breakGap else { return Path() }
@@ -460,19 +473,17 @@ struct QuotaLiquidAlert: View {
                 Canvas { context, _ in
                     context.clip(to: Self.outsideNotch(notchWidth: notchWidth), style: FillStyle(eoFill: true))
                     if reduceMotion {
-                        context.fill(Path(ellipseIn: CGRect(x: restingX - Self.diameter / 2, y: (32 - Self.diameter) / 2,
-                                                            width: Self.diameter, height: Self.diameter)), with: .color(.black))
+                        context.fill(Self.bubblePath(centerX: restingX), with: .color(.black))
                     } else if progress > 0 {
                         context.fill(Self.bridge(circleX: circleX, notchWidth: notchWidth), with: .color(.black))
-                        context.fill(Path(ellipseIn: CGRect(x: circleX - Self.diameter / 2, y: (32 - Self.diameter) / 2,
-                                                            width: Self.diameter, height: Self.diameter)), with: .color(.black))
+                        context.fill(Self.bubblePath(centerX: circleX), with: .color(.black))
                     }
                 }
                 .accessibilityHidden(true)
                 bubbleContent
                 .foregroundStyle(.white)
-                .frame(width: Self.diameter, height: Self.diameter)
-                .offset(x: (reduceMotion ? restingX : circleX) - Self.diameter / 2, y: (32 - Self.diameter) / 2)
+                .frame(width: Self.bubbleWidth, height: Self.bubbleHeight)
+                .offset(x: (reduceMotion ? restingX : circleX) - Self.bubbleWidth / 2, y: (32 - Self.bubbleHeight) / 2)
                 .opacity(min(1, max(0, (spread - 0.8) / 0.15)))
             }
             .frame(width: 440, height: 72)
@@ -582,13 +593,12 @@ struct AgentEyes: View {
             let time = timeline.date.timeIntervalSinceReferenceDate
             let offset = animate && !reduceMotion && mood == .glance ? Self.gazeOffset(at: time) : 0
             let blink = animate && !reduceMotion ? Self.blinkScale(at: time) : 1
-            HStack(spacing: 2) {
-                eye(offset: offset, blink: blink, time: time)
-                eye(offset: offset, blink: blink, time: time)
-            }
-            .overlay(alignment: .bottom) {
+            VStack(spacing: 1) {
+                HStack(spacing: 2) {
+                    eye(offset: offset, blink: blink, time: time)
+                    eye(offset: offset, blink: blink, time: time)
+                }
                 mouth(mood: mood, time: time, animate: animate && !reduceMotion)
-                    .offset(y: 7)
             }
         }
         .accessibilityHidden(true)
