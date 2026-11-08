@@ -11,6 +11,8 @@ cp .build/release/Pulau "$CONTENTS/MacOS/Pulau"
 RESOURCE_BUNDLE=".build/release/Pulau_Pulau.bundle"
 [ -d "$RESOURCE_BUNDLE" ] || { echo "FAIL: resource bundle missing: $RESOURCE_BUNDLE"; exit 1; }
 cp -R "$RESOURCE_BUNDLE" "$CONTENTS/Resources/"
+mkdir -p "$CONTENTS/Resources/PiSubagents"
+cp Integrations/PiSubagents/{package.json,index.ts,reporter.ts,config.ts} "$CONTENTS/Resources/PiSubagents/"
 cat > "$CONTENTS/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

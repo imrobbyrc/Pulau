@@ -1,0 +1,10 @@
+{
+  "name": "pulau-pi-subagents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Report Pi subagent status to Rex for Pulau",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

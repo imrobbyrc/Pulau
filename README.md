@@ -25,6 +25,8 @@ Sign in to Codex from the menu to see your five-hour remaining limit in the isla
 
 ## Permission and privacy
 
+The optional Pi Subagents plugin sends the first line of each working subagent's task instruction to Rex (up to 80 characters) for Pulau's hover details. This may contain sensitive information. Disable the plugin in Pulau or with `/pulau-subagents off` to stop sharing. See `Integrations/PiSubagents/README.md`.
+
 macOS has no public API for observing notifications from other apps. Pulau reads the private `usernoted` SQLite database in read-only mode, so macOS updates may break capture. It requires **Full Disk Access**:
 
 1. Open **Full Disk Access Settings…** from Pulau's menu.

@@ -3,8 +3,46 @@ import ObjectiveC
 import SwiftUI
 
 struct PrivateGlassBackdrop: NSViewRepresentable {
-    func makeNSView(context: Context) -> PrivateGlassContainer { PrivateGlassContainer() }
-    func updateNSView(_ view: PrivateGlassContainer, context: Context) {}
+    var rounded = false
+    var tailX: CGFloat?
+    var dim = false
+    func makeNSView(context: Context) -> PrivateGlassContainer {
+        let view = PrivateGlassContainer()
+        apply(to: view)
+        return view
+    }
+    func updateNSView(_ view: PrivateGlassContainer, context: Context) { apply(to: view) }
+    private func apply(to view: PrivateGlassContainer) {
+        view.rounded = rounded
+        view.tailX = tailX
+        view.dim = dim
+    }
+}
+
+/// Rounded panel with an upward tail, used by the agent hover panel.
+struct AgentPanelShape: InsettableShape {
+    var tailX: CGFloat
+    var tailHeight: CGFloat = 10
+    var insetAmount: CGFloat = 0
+
+    func inset(by amount: CGFloat) -> some InsettableShape {
+        var shape = self
+        shape.insetAmount += amount
+        return shape
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let rect = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        var p = Path()
+        let body = CGRect(x: rect.minX, y: rect.minY + tailHeight, width: rect.width, height: rect.height - tailHeight)
+        p.addRoundedRect(in: body, cornerSize: CGSize(width: 22, height: 22), style: .continuous)
+        let tip = CGPoint(x: rect.minX + tailX, y: rect.minY + 1)
+        p.move(to: CGPoint(x: tip.x - 9, y: body.minY + 1))
+        p.addLine(to: tip)
+        p.addLine(to: CGPoint(x: tip.x + 9, y: body.minY + 1))
+        p.closeSubpath()
+        return p
+    }
 }
 
 final class PrivateGlassContainer: NSView {
@@ -12,6 +50,9 @@ final class PrivateGlassContainer: NSView {
     private var glassView: NSView!
     private var blackOverlay: PrivateGlassBlackOverlay!
     private var previousSize = NSSize.zero
+    var rounded = false { didSet { if rounded != oldValue { previousSize = .zero; needsLayout = true } } }
+    var tailX: CGFloat? { didSet { if tailX != oldValue { previousSize = .zero; needsLayout = true } } }
+    var dim = false { didSet { if dim != oldValue { blackOverlay.dim = dim; blackOverlay.needsDisplay = true } } }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -31,6 +72,7 @@ final class PrivateGlassContainer: NSView {
         }
         blackOverlay = PrivateGlassBlackOverlay()
         blackOverlay.wantsLayer = true
+        blackOverlay.dim = dim
         addSubview(blackOverlay)
     }
 
@@ -61,7 +103,14 @@ final class PrivateGlassContainer: NSView {
         previousSize = bounds.size
         glassView.frame = bounds
         blackOverlay.frame = bounds
-        let shape = IslandShape(radius: bounds.height > 32 ? 34 : 16).path(in: bounds).cgPath
+        let shape: CGPath
+        if let tailX {
+            shape = AgentPanelShape(tailX: tailX).path(in: bounds).cgPath
+        } else if rounded {
+            shape = RoundedRectangle(cornerRadius: 22, style: .continuous).path(in: bounds).cgPath
+        } else {
+            shape = IslandShape(radius: bounds.height > 32 ? 34 : 16).path(in: bounds).cgPath
+        }
         blackOverlay.shape = shape
         blackOverlay.needsDisplay = true
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
@@ -108,6 +157,7 @@ final class PrivateGlassContainer: NSView {
 final class PrivateGlassBlackOverlay: NSView {
     override var isFlipped: Bool { true }
     var shape: CGPath?
+    var dim = false
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext, let shape else { return }
@@ -115,6 +165,11 @@ final class PrivateGlassBlackOverlay: NSView {
         defer { context.restoreGState() }
         context.addPath(shape)
         context.clip()
+        if dim {
+            context.setFillColor(NSColor.black.withAlphaComponent(0.35).cgColor)
+            context.fill(bounds)
+            return
+        }
         context.setFillColor(NSColor.black.cgColor)
         context.fill(CGRect(x: 0, y: 0, width: bounds.width, height: 30))
         let colors = [1.0, 0.8, 0.5, 0.2, 0.0].map { NSColor.black.withAlphaComponent($0).cgColor } as CFArray

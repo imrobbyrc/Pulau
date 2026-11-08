@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -8,16 +9,27 @@ final class NotificationWatcher: ObservableObject {
 
     private let capture = NotificationCapture()
     private let preferences: IslandPreferences
+    private let quotaThresholds: QuotaThresholdTracker
+    private var pendingQuotaAlerts: [QuotaAlert] = []
+    private var activeQuotaAlert: QuotaAlert?
     private var timer: Timer?
     private let presenter = BannerPresenter()
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
     private var hoverTask: Task<Void, Never>?
+    private var rexSubscription: AnyCancellable?
+    private var rexEventSubscription: AnyCancellable?
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private let glm: GLMUsageStore
     private let codex: CodexUsageStore
+    private let rex: RexAgentStore
+    @Published private(set) var sleepPreventing = false
+    let sleepGuard: SleepGuard
+    let buddyStore: BuddyStore
+    private var sleepSubscription: AnyCancellable?
     private var pointerInside = false
+    private var notchWidth: CGFloat = 185
 
     /// Active island look; persisted so the choice survives relaunch.
     /// Published so the menu checkmark follows immediately.
@@ -38,15 +50,31 @@ final class NotificationWatcher: ObservableObject {
     // panel+hosting rendering from view logic.
     private let plainRect = ProcessInfo.processInfo.arguments.contains("--plain")
 
-    init(glm: GLMUsageStore, codex: CodexUsageStore, defaults: UserDefaults = .standard) {
+    init(glm: GLMUsageStore, codex: CodexUsageStore, rex: RexAgentStore, defaults: UserDefaults = .standard) {
         self.glm = glm
         self.codex = codex
+        self.rex = rex
         let preferences = IslandPreferences(defaults: defaults)
         self.preferences = preferences
+        self.quotaThresholds = QuotaThresholdTracker(defaults: defaults)
+        self.sleepGuard = SleepGuard(preferences: AgentAwakePreferences(defaults: defaults))
+        self.buddyStore = BuddyStore(defaults: defaults)
         self.look = preferences.look
         self.expandPreference = preferences.expandPreference
+        sleepSubscription = sleepGuard.$preventingSleep.sink { [weak self] in self?.sleepPreventing = $0 }
         presenter.look = look
         presenter.expandPreference = expandPreference
+        glm.onQuotaUpdate = { [weak self] in self?.receiveQuota($0, provider: .glm) }
+        codex.onQuotaUpdate = { [weak self] in self?.receiveQuota($0, provider: .codex) }
+        glm.onCredentialsChanged = { [weak self] in self?.quotaThresholds.reset(.glm) }
+        codex.onCredentialsChanged = { [weak self] in self?.quotaThresholds.reset(.codex) }
+        rexSubscription = rex.$snapshot.sink { [weak self] snapshot in
+            self?.presenter.updateAgentActivity(snapshot)
+            self?.sleepGuard.update(snapshot: snapshot)
+        }
+        rexEventSubscription = rex.$activityEvent.compactMap { $0 }.sink { [weak self] event in
+            self?.presenter.updateAgentActivity(event: event)
+        }
         if preferences.notificationsEnabled { start() }
         DispatchQueue.main.async { [weak self] in self?.showIsland() }
         // Debug affordance: run the binary with --test-banner to flash a
@@ -106,15 +134,32 @@ final class NotificationWatcher: ObservableObject {
         isListening = false
         timer?.invalidate()
         timer = nil
-        dismissTask?.cancel()
-        presenter.dismiss()
-        presenter.clear()
         capture.stop()
         status = "Off"
     }
 
     func showTestBanner() {
         show(PulauNotification(app: "Pulau", title: "Test notification", body: "Pulau banner is working."))
+    }
+
+    func showTestQuotaAlert() {
+        enqueueQuotaAlert(QuotaAlert(provider: .glm, remaining: 30))
+    }
+
+    private func receiveQuota(_ remaining: Double, provider: QuotaThresholdTracker.Provider) {
+        guard quotaThresholds.crossedThreshold(for: provider, remaining: remaining) != nil else { return }
+        enqueueQuotaAlert(QuotaAlert(provider: provider, remaining: Int(ceil(remaining))))
+    }
+
+    private func enqueueQuotaAlert(_ alert: QuotaAlert) {
+        if presenter.note != nil { pendingQuotaAlerts.append(alert) }
+        else { showQuotaAlert(alert) }
+    }
+
+    private func showQuotaAlert(_ alert: QuotaAlert) {
+        let name = alert.provider == .glm ? "GLM" : "Codex"
+        let note = PulauNotification(app: name, title: "5h limit: \(alert.remaining)% left", body: "")
+        show(note, quotaAlert: alert)
     }
 
     func openPrivacySettings() {
@@ -131,16 +176,25 @@ final class NotificationWatcher: ObservableObject {
     private func showIsland() {
         guard panel == nil else { return }
         let width: CGFloat = 440
-        let height: CGFloat = 190
+        let screen = NSScreen.main
+        let height = min(490, max(190, (screen?.visibleFrame.height ?? 530) - 40))
+        let notchWidth: CGFloat
+        if let left = screen?.auxiliaryTopLeftArea, let right = screen?.auxiliaryTopRightArea,
+           right.minX > left.maxX, right.minX - left.maxX < width {
+            notchWidth = right.minX - left.maxX
+        } else {
+            notchWidth = 185
+        }
+        self.notchWidth = notchWidth
         let panel = makePanel(width: width, height: height)
         self.panel = panel
         let controller = NSHostingController(rootView: plainRect
             ? AnyView(Rectangle().fill(.red).frame(width: 440, height: 160))
-            : AnyView(IslandBannerView(presenter: presenter, glm: glm, codex: codex).frame(width: width, height: height, alignment: .top)))
+            : AnyView(IslandBannerView(presenter: presenter, glm: glm, codex: codex, rex: rex, notchWidth: notchWidth, panelHeight: height, buddyStore: buddyStore).frame(width: width, height: height, alignment: .top)))
         controller.sizingOptions = []
         panel.contentViewController = controller
         panel.setContentSize(NSSize(width: width, height: height))
-        if let screen = NSScreen.main {
+        if let screen {
             // The fixed-size panel stays pinned while only its contents animate.
             panel.setFrameTopLeftPoint(NSPoint(x: screen.frame.midX - panel.frame.width / 2, y: screen.frame.maxY))
         }
@@ -158,12 +212,20 @@ final class NotificationWatcher: ObservableObject {
     private func updatePointer() {
         guard let panel else { return }
         let frame = panel.frame
-        let width = presenter.state.width
-        let height = presenter.state.height
+        let width = presenter.quotaAlert == nil ? presenter.state.width : IslandState.collapsed.width
+        let height = presenter.quotaAlert == nil ? presenter.state.height : IslandState.collapsed.height
         let rect = NSRect(x: frame.midX - width / 2, y: frame.maxY - height,
                           width: width, height: height).insetBy(dx: -4, dy: -4)
-        let inside = rect.contains(NSEvent.mouseLocation)
-        panel.ignoresMouseEvents = !inside
+        let point = NSEvent.mouseLocation
+        let activityAvailable = presenter.note == nil && presenter.state == .collapsed && presenter.agentActivityVisible && presenter.agentActivity?.stage == .working
+        let detailHeight = QuotaLiquidAlert.detailHeight(for: rex.snapshot, available: frame.height - QuotaLiquidAlert.detailY)
+        let overActivity = activityAvailable && Self.agentHoverContains(point, frame: frame, notchWidth: notchWidth,
+                                                                       includeDetail: presenter.agentDetailHovered, detailHeight: detailHeight)
+        if presenter.agentDetailHovered != overActivity {
+            withAnimation(Motion.spring) { presenter.agentDetailHovered = overActivity }
+        }
+        let inside = rect.contains(point) && !overActivity
+        panel.ignoresMouseEvents = !inside && !overActivity
         guard inside != pointerInside else { return }
         pointerInside = inside
         hoverTask?.cancel()
@@ -178,9 +240,23 @@ final class NotificationWatcher: ObservableObject {
         }
     }
 
-    private func show(_ notification: PulauNotification) {
+    static func agentHoverContains(_ point: NSPoint, frame: NSRect, notchWidth: CGFloat, includeDetail: Bool,
+                                   detailHeight: CGFloat) -> Bool {
+        let center = frame.minX + QuotaLiquidAlert.restingX(notchWidth: notchWidth)
+        let bubble = NSRect(x: center - QuotaLiquidAlert.diameter / 2, y: frame.maxY - 32 + (32 - QuotaLiquidAlert.diameter) / 2,
+                            width: QuotaLiquidAlert.diameter, height: QuotaLiquidAlert.diameter).insetBy(dx: -5, dy: -5)
+        let detail = NSRect(x: frame.minX + QuotaLiquidAlert.detailX(notchWidth: notchWidth),
+                            y: frame.maxY - QuotaLiquidAlert.detailY - detailHeight,
+                            width: QuotaLiquidAlert.detailWidth, height: detailHeight + QuotaLiquidAlert.tailHeight)
+        return bubble.contains(point) || (includeDetail && detail.contains(point))
+    }
+
+    private func show(_ notification: PulauNotification, quotaAlert: QuotaAlert? = nil) {
+        if let activeQuotaAlert { pendingQuotaAlerts.insert(activeQuotaAlert, at: 0) }
+        activeQuotaAlert = quotaAlert
         showIsland()
-        presenter.present(notification)
+        presenter.present(notification, quotaAlert: quotaAlert)
+        updatePointer()
         let generation = presenter.generation
         DispatchQueue.main.async { [weak self] in
             guard let presenter = self?.presenter, presenter.generation == generation else { return }
@@ -191,12 +267,18 @@ final class NotificationWatcher: ObservableObject {
             try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled else { return }
             guard let self else { return }
-            let duration = Motion.dismissDuration
+            let duration = self.activeQuotaAlert != nil && !Motion.reduce
+                ? QuotaLiquidAlert.duration : Motion.dismissDuration
             self.presenter.dismiss(duration: duration)
             try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled else { return }
             self.presenter.clear()
-            self.updatePointer()
+            self.activeQuotaAlert = nil
+            if !self.pendingQuotaAlerts.isEmpty {
+                self.showQuotaAlert(self.pendingQuotaAlerts.removeFirst())
+            } else {
+                self.updatePointer()
+            }
         }
     }
 

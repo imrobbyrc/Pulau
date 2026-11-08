@@ -1,7 +1,6 @@
 import Foundation
 import Combine
 import Security
-import UserNotifications
 
 private actor GLMKeychain {
     // Legacy login keychain: data-protection keychain fails with
@@ -58,21 +57,10 @@ final class GLMUsageStore: ObservableObject {
     private var delay: TimeInterval = 300
     private var failures = 0
     private var retryNotBefore = Date.distantPast
-    // Highest severity already notified: 100 = none, 10 = low, 0 = exhausted.
-    private var notifiedLevel = 100
+    var onQuotaUpdate: ((Double) -> Void)?
+    var onCredentialsChanged: (() -> Void)?
 
     init() {
-        // Debug: fire the threshold notification immediately, e.g.
-        // `--glm-test-notification 8` (percent optional, default 8).
-        let args = ProcessInfo.processInfo.arguments
-        if let index = args.firstIndex(of: "--glm-test-notification"),
-           index + 1 < args.count,
-           let percent = Double(args[index + 1]) {
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(1))
-                self?.evaluateThresholds(percent)
-            }
-        }
         let id = generation
         Task {
             do {
@@ -97,6 +85,7 @@ final class GLMUsageStore: ObservableObject {
             do {
                 try await keychain.save(key)
                 hasKey = true
+                onCredentialsChanged?()
                 clearUsage()
                 delay = 300
                 failures = 0
@@ -116,6 +105,7 @@ final class GLMUsageStore: ObservableObject {
                 loop?.cancel()
                 generation = UUID()
                 hasKey = false
+                onCredentialsChanged?()
                 loading = false
                 clearUsage()
             } catch { self.error = "Unable to remove GLM key from Keychain." }
@@ -130,34 +120,6 @@ final class GLMUsageStore: ObservableObject {
         weeklyRemainingPercent = nil
         planName = nil
         error = nil
-        notifiedLevel = 100
-    }
-
-    /// Fires a local notification once per crossing: at 10% left and at 0%.
-    /// Re-arms automatically when the percentage recovers above the level.
-    private func evaluateThresholds(_ percent: Double) {
-        let level = percent <= 0 ? 0 : (percent <= 10 ? 10 : 100)
-        guard level < notifiedLevel else {
-            if level > notifiedLevel { notifiedLevel = level }
-            return
-        }
-        notifiedLevel = level
-        let center = UNUserNotificationCenter.current()
-        Task {
-            let granted = (try? await center.requestAuthorization(options: [.alert])) ?? false
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "GLM 5h"
-            content.body = level == 0
-                ? "5-hour window exhausted."
-                : String(format: "About %d%% left in the 5-hour window.", Int(percent.rounded()))
-            let request = UNNotificationRequest(
-                identifier: level == 0 ? "glm-5h-zero" : "glm-5h-ten",
-                content: content,
-                trigger: nil
-            )
-            try? await center.add(request)
-        }
     }
 
     private func restart() {
@@ -200,9 +162,7 @@ final class GLMUsageStore: ObservableObject {
             delay = 300
             failures = 0
             retryNotBefore = .distantPast
-            if let percent = fiveHourRemainingPercent {
-                evaluateThresholds(percent)
-            }
+            onQuotaUpdate?(session.remainingPercent)
         } catch {
             guard !Task.isCancelled, generation == id else { return }
             if let http = error as? ZAIUsageClient.HTTPError {

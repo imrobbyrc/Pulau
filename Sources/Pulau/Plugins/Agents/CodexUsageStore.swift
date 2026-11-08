@@ -21,6 +21,8 @@ final class CodexUsageStore: ObservableObject {
     private var delay: TimeInterval = 300
     private var failures = 0
     private var retryNotBefore = Date.distantPast
+    var onQuotaUpdate: ((Double) -> Void)?
+    var onCredentialsChanged: (() -> Void)?
 
     init() {
         let id = generation
@@ -49,6 +51,7 @@ final class CodexUsageStore: ObservableObject {
                 try await auth.signIn()
                 guard !Task.isCancelled, generation == id else { return }
                 signInState = .signedIn
+                onCredentialsChanged?()
                 delay = 300; failures = 0; retryNotBefore = .distantPast
                 restart()
             } catch {
@@ -66,6 +69,7 @@ final class CodexUsageStore: ObservableObject {
         signInTask?.cancel()
         loading = false
         signInState = .signedOut
+        onCredentialsChanged?()
         fiveHourRemaining = nil; secondaryRemaining = nil
         primaryResetAt = nil; secondaryResetAt = nil; planName = nil; error = nil
         Task {
@@ -103,6 +107,7 @@ final class CodexUsageStore: ObservableObject {
             secondaryResetAt = usage.secondary?.resetAt
             planName = usage.planName
             error = nil; delay = 300; failures = 0; retryNotBefore = .distantPast
+            if let remaining = usage.primary?.remainingPercent { onQuotaUpdate?(remaining) }
         } catch {
             guard !Task.isCancelled, generation == id else { return }
             self.error = "Codex: unavailable; retrying."
