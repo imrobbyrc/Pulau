@@ -188,7 +188,19 @@ final class BannerPresenter: ObservableObject {
         }
         guard action.question != lastActionQuestion, note == nil else { return }
         lastActionQuestion = action.question
-        present(PulauNotification(app: action.agent, title: "Needs your input", body: action.question))
+        let notification = PulauNotification(app: action.agent, title: "Needs your input", body: action.question)
+        present(notification)
+        withAnimation(Motion.spring) { state = .full }
+        let generation = UUID()
+        activityGeneration = generation
+        Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(6)) } catch { return }
+            guard let self, self.note == notification else { return }
+            self.dismiss()
+            try? await Task.sleep(for: .seconds(Motion.dismissDuration))
+            guard self.note == notification else { return }
+            self.clear()
+        }
     }
 
     private func updateAgentPresentation() {

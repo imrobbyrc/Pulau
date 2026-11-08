@@ -52,6 +52,7 @@ struct GlassSegmentedPicker<Option: Hashable>: View {
                     Text(option.label)
                         .font(.mono(11, weight: selection == option.value ? .semibold : .regular))
                         .foregroundStyle(selection == option.value ? .white : .white.opacity(0.65))
+                        .shadow(color: .black.opacity(0.85), radius: 2, y: 1)
                         .padding(.horizontal, Design.spacingM)
                         .padding(.vertical, 5)
                         .background {
@@ -74,8 +75,8 @@ struct GlassSegmentedPicker<Option: Hashable>: View {
     private var capsule: some View {
         if #available(macOS 26.0, *) {
             Capsule(style: .continuous)
-                .fill(.white.opacity(0.1))
-                .glassEffect(.regular.interactive().tint(.white.opacity(0.08)), in: Capsule(style: .continuous))
+                .fill(.white.opacity(0.06))
+                .glassEffect(.regular.interactive().tint(.black.opacity(0.25)), in: Capsule(style: .continuous))
                 .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(Design.strokeBright), lineWidth: 0.8))
         } else {
             Capsule(style: .continuous)

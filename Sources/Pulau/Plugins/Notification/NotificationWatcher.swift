@@ -13,7 +13,7 @@ final class NotificationWatcher: ObservableObject {
     private var pendingQuotaAlerts: [QuotaAlert] = []
     private var activeQuotaAlert: QuotaAlert?
     private var timer: Timer?
-    private let presenter = BannerPresenter()
+    let presenter = BannerPresenter()  // internal for the --e2e-hover test hook
     private var panel: NSPanel?
     private var dismissTask: Task<Void, Never>?
     private var hoverTask: Task<Void, Never>?

@@ -74,12 +74,16 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(Design.spacingL)
                     .background {
-                        GlassSurface(look: notifications.look,
-                                     shape: RoundedRectangle(cornerRadius: Design.cornerCard, style: .continuous),
-                                     glassTint: notifications.look == .glassy ? .black.opacity(0.5) : nil,
-                                     blackFill: notifications.look == .glassy ? 0.35 : nil)
-                        RoundedRectangle(cornerRadius: Design.cornerCard, style: .continuous)
-                            .strokeBorder(.white.opacity(Design.strokeBright), lineWidth: 0.8)
+                        let shape = RoundedRectangle(cornerRadius: Design.cornerCard, style: .continuous)
+                        // Public glass keeps the card renderable offscreen; the private
+                        // variant belongs to the island only.
+                        if notifications.look != .solid, #available(macOS 26.0, *) {
+                            Color.clear.glassEffect(.regular.tint(.black.opacity(0.45)), in: shape)
+                        } else if notifications.look != .solid {
+                            IslandGlass().clipShape(shape)
+                        }
+                        shape.fill(.black.opacity(notifications.look == .solid ? 1 : 0.35))
+                        shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.8)
                     }
             }
             .padding(Design.spacingL)
