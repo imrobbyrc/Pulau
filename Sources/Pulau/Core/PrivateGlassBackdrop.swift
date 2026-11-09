@@ -97,6 +97,8 @@ final class PrivateGlassContainer: NSView {
         return glass
     }
 
+    private var pathTimer: Timer?
+
     override func layout() {
         super.layout()
         guard bounds.size != previousSize, bounds.width > 40, bounds.height > 0 else { return }
@@ -113,6 +115,22 @@ final class PrivateGlassContainer: NSView {
         }
         blackOverlay.shape = shape
         blackOverlay.needsDisplay = true
+        // The variant 11 glass breaks when its path is rewritten every animation
+        // frame, so updates settle briefly before being applied.
+        pathTimer?.invalidate()
+        let boundsCopy = bounds
+        let timer = Timer(timeInterval: 0.09, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.bounds.size == boundsCopy.size else { return }
+                let shape = IslandShape(radius: self.bounds.height > 32 ? 34 : 16).path(in: self.bounds).cgPath
+                self.applyGlassPath(shape)
+            }
+        }
+        pathTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func applyGlassPath(_ shape: CGPath) {
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
             let selector = NSSelectorFromString("_setPath:")
             if let method = class_getInstanceMethod(NSGlassEffectView.self, selector),
