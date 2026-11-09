@@ -41,16 +41,40 @@ struct PulauApp: App {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         Timer.scheduledTimer(withTimeInterval: 1.2, repeats: true) { _ in
             MainActor.assumeIsolated {
-            for (number, window) in NSApplication.shared.windows.enumerated() where window.isVisible {
-                guard let view = window.contentView else { continue }
-                let bounds = view.bounds
-                guard bounds.width > 1, bounds.height > 1,
-                      let rep = view.bitmapImageRepForCachingDisplay(in: bounds) else { continue }
-                view.cacheDisplay(in: bounds, to: rep)
-                guard let data = rep.representation(using: .png, properties: [:]) else { continue }
-                let kind = window is NSPanel ? "panel" : "window"
-                try? data.write(to: directory.appendingPathComponent("\(number)-\(kind).png"))
-            }
+                let cgWindows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as NSArray?) as? [[String: Any]] ?? []
+                for (number, window) in NSApplication.shared.windows.enumerated() where window.isVisible {
+                    guard let view = window.contentView else { continue }
+                    let bounds = view.bounds
+                    guard bounds.width > 1, bounds.height > 1 else { continue }
+                    let kind = window is NSPanel ? "panel" : "window"
+                    if let rep = view.bitmapImageRepForCachingDisplay(in: bounds) {
+                        view.cacheDisplay(in: bounds, to: rep)
+                        if let data = rep.representation(using: .png, properties: [:]) {
+                            try? data.write(to: directory.appendingPathComponent("\(number)-\(kind).png"))
+                        }
+                    }
+                    // Live WindowServer composite: includes Liquid Glass that cacheDisplay misses.
+                    let frame = window.frame
+                    let screen = NSScreen.main?.frame ?? .zero
+                    let topY = screen.maxY - frame.maxY
+                    var windowNumber: NSNumber?
+                    for entry in cgWindows {
+                        guard let b = entry["kCGWindowBounds"] as? [String: NSNumber] else { continue }
+                        let x = b["X"]?.doubleValue ?? -1
+                        let y = b["Y"]?.doubleValue ?? -1
+                        if abs(x - frame.minX) < 4, abs(y - topY) < 4 {
+                            windowNumber = entry["kCGWindowNumber"] as? NSNumber
+                            break
+                        }
+                    }
+                    if let windowNumber,
+                       let live = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(windowNumber.uint32Value), [.bestResolution]) {
+                        let liveRep = NSBitmapImageRep(cgImage: live)
+                        if let liveData = liveRep.representation(using: .png, properties: [:]) {
+                            try? liveData.write(to: directory.appendingPathComponent("\(number)-live.png"))
+                        }
+                    }
+                }
             }
         }
     }
