@@ -72,11 +72,15 @@ final class PrivateGlassContainer: NSView {
                 if let glass { Self.reduceHighlight(glass) }
             }
         } else {
-            let fallback = SystemBackdrop.makeBackdrop()
+            let fallback = NSView()
+            fallback.wantsLayer = true
+            fallback.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.92).cgColor
             glassView = fallback
             addSubview(fallback)
         }
-        fallbackView = SystemBackdrop.makeBackdrop()
+        fallbackView = NSView()
+        fallbackView.wantsLayer = true
+        fallbackView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.92).cgColor
         fallbackView.isHidden = true
         addSubview(fallbackView)
         blackOverlay = PrivateGlassBlackOverlay()
@@ -123,6 +127,10 @@ final class PrivateGlassContainer: NSView {
         }
         blackOverlay.shape = shape
         blackOverlay.needsDisplay = true
+        let fallbackMask = CAShapeLayer()
+        fallbackMask.frame = bounds
+        fallbackMask.path = shape
+        fallbackView.layer?.mask = fallbackMask
         applyGlassPath()
     }
 
