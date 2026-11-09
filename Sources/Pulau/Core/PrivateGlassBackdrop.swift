@@ -6,6 +6,9 @@ struct PrivateGlassBackdrop: NSViewRepresentable {
     var rounded = false
     var tailX: CGFloat?
     var dim = false
+    /// Tall surfaces switch to the HUD fallback: the variant 11 glass renders
+    /// fully transparent above ~100pt, and swapping views live causes flicker.
+    var tall = false
     func makeNSView(context: Context) -> PrivateGlassContainer {
         let view = PrivateGlassContainer()
         apply(to: view)
@@ -16,6 +19,7 @@ struct PrivateGlassBackdrop: NSViewRepresentable {
         view.rounded = rounded
         view.tailX = tailX
         view.dim = dim
+        view.useFallback = tall
     }
 }
 
@@ -48,11 +52,13 @@ struct AgentPanelShape: InsettableShape {
 final class PrivateGlassContainer: NSView {
     override var isFlipped: Bool { true }
     private var glassView: NSView!
+    private var fallbackView: NSView!
     private var blackOverlay: PrivateGlassBlackOverlay!
     private var previousSize = NSSize.zero
     var rounded = false { didSet { if rounded != oldValue { previousSize = .zero; needsLayout = true } } }
     var tailX: CGFloat? { didSet { if tailX != oldValue { previousSize = .zero; needsLayout = true } } }
     var dim = false { didSet { if dim != oldValue { blackOverlay.dim = dim; blackOverlay.needsDisplay = true } } }
+    var useFallback = false { didSet { guard useFallback != oldValue else { return }; glassView.isHidden = useFallback; fallbackView.isHidden = !useFallback } }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -70,6 +76,9 @@ final class PrivateGlassContainer: NSView {
             glassView = fallback
             addSubview(fallback)
         }
+        fallbackView = SystemBackdrop.makeBackdrop()
+        fallbackView.isHidden = true
+        addSubview(fallbackView)
         blackOverlay = PrivateGlassBlackOverlay()
         blackOverlay.wantsLayer = true
         blackOverlay.dim = dim
@@ -102,6 +111,7 @@ final class PrivateGlassContainer: NSView {
         guard bounds.size != previousSize, bounds.width > 40, bounds.height > 0 else { return }
         previousSize = bounds.size
         glassView.frame = bounds
+        fallbackView.frame = bounds
         blackOverlay.frame = bounds
         let shape: CGPath
         if let tailX {

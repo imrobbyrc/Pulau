@@ -113,7 +113,7 @@ struct IslandBannerView: View {
             case .solid:
                 shape.fill(.black)
             case .systemExperimental:
-                PrivateGlassBackdrop()
+                PrivateGlassBackdrop(tall: presenter.state == .full && presenter.note == nil)
             }
             if presenter.look != .solid {
                 shape.fill(.black)
