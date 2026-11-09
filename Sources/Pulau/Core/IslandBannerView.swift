@@ -12,7 +12,6 @@ struct IslandBannerView: View {
     let buddyStore: BuddyStore
     private let islandWidth: CGFloat = 360
     private let contentHeight: CGFloat = 52
-    private let islandHeight: CGFloat = 174
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -44,6 +43,7 @@ struct IslandBannerView: View {
     @ViewBuilder
     private var surface: some View {
         let expanded = presenter.state == .full
+        let contentDriven = expanded && presenter.note == nil
         VStack(spacing: 0) {
             // Keep the real notch line clear so the surface reads as growing out of it.
             Color.clear.frame(height: presenter.note == nil ? 54 : 30)
@@ -53,11 +53,15 @@ struct IslandBannerView: View {
                     .opacity(expanded ? 1 : 0)
             } else if expanded {
                 usageContent
-                    .frame(width: islandWidth - 80, height: islandHeight - 74)
+                    .frame(width: islandWidth - 80)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxHeight: IslandState.expandedMaxHeight - 54, alignment: .top)
                     .transition(.opacity)
             }
         }
-        .frame(width: presenter.state.width, height: presenter.state.height(notification: presenter.note != nil), alignment: .top)
+        .frame(width: presenter.state.width,
+               height: contentDriven ? nil : presenter.state.height(notification: presenter.note != nil),
+               alignment: .top)
         .overlay(alignment: .top) {
             Button(action: presenter.expandFromView) {
                 HStack(spacing: 0) {

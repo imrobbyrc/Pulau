@@ -26,11 +26,12 @@ enum ExpandPreference: String {
 enum IslandState {
     case collapsed, minimal, full
 
+    static let expandedMaxHeight: CGFloat = 170
     var width: CGFloat { self == .collapsed ? 185 : 360 }
 
     /// Notification banners stay compact.
     func height(notification: Bool) -> CGFloat {
-        self == .full ? (notification ? 84 : 174) : 32
+        self == .full ? (notification ? 84 : Self.expandedMaxHeight) : 32
     }
 }
 

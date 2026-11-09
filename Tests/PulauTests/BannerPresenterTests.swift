@@ -4,7 +4,8 @@ import XCTest
 @MainActor
 final class BannerPresenterTests: XCTestCase {
     func testIslandHeightsKeepExpandedUsageBackgroundTall() {
-        XCTAssertEqual(IslandState.full.height(notification: false), 174)
+        XCTAssertEqual(IslandState.full.height(notification: false), 170)
+        XCTAssertEqual(IslandState.expandedMaxHeight, 170)
         XCTAssertEqual(IslandState.full.height(notification: true), 84)
         XCTAssertEqual(IslandState.collapsed.height(notification: false), 32)
     }
