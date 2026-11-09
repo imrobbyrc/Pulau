@@ -30,7 +30,7 @@ enum IslandState {
 
     /// Notification banners stay compact.
     func height(notification: Bool) -> CGFloat {
-        self == .full ? (notification ? 84 : 32) : 32
+        self == .full ? (notification ? 84 : 174) : 32
     }
 }
 
