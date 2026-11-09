@@ -250,10 +250,6 @@ struct IslandBannerView: View {
                                    status: glm.error ?? (glm.hasKey ? "Loading…" : "Set API key via menu"),
                                    showWeekly: false, now: context.date)
                 }
-                Text(rex.snapshot.summary)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
             }
             .foregroundStyle(.white)
             .monospacedDigit()
