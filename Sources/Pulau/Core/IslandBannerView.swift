@@ -322,35 +322,36 @@ struct IslandBannerView: View {
     }
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
-        HStack(spacing: Design.spacingM) {
-            appIcon(for: notification)
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(notification.app)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.6))
+        VStack(spacing: 4) {
+            Text(notification.app)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+            HStack(spacing: Design.spacingM) {
+                appIcon(for: notification)
+                    .frame(width: 26, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
+                Text(bannerLine(notification))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
                     .lineLimit(1)
-                if !notification.title.isEmpty {
-                    Text(notification.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                }
-                if !notification.body.isEmpty {
-                    Text(notification.body)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(1)
-                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, Design.spacingL)
-        .padding(.vertical, 4)
         .shadow(color: .black.opacity(0.7), radius: 3, y: 1)
         .preferredColorScheme(.dark)
+    }
+
+    /// Single-line content: title, body, or both joined.
+    private func bannerLine(_ notification: PulauNotification) -> String {
+        switch (notification.title.isEmpty, notification.body.isEmpty) {
+        case (false, false): return "\(notification.title) — \(notification.body)"
+        case (false, true): return notification.title
+        case (true, false): return notification.body
+        default: return ""
+        }
     }
 
     private func appIcon(for notification: PulauNotification) -> some View {

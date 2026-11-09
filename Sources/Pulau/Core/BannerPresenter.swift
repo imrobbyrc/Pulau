@@ -28,9 +28,9 @@ enum IslandState {
 
     var width: CGFloat { self == .collapsed ? 185 : 360 }
 
-    /// Notification banners stay compact (40% of the usage height).
+    /// Notification banners stay compact.
     func height(notification: Bool) -> CGFloat {
-        self == .full ? (notification ? 70 : 174) : 32
+        self == .full ? (notification ? 84 : 32) : 32
     }
 }
 
