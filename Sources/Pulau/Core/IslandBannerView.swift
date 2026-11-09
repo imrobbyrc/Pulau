@@ -322,26 +322,23 @@ struct IslandBannerView: View {
     }
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
-        VStack(spacing: 4) {
-            Text(notification.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Design.spacingL)
-            HStack(spacing: Design.spacingM) {
-                Spacer(minLength: 0)
-                appIcon(for: notification)
-                    .frame(width: 26, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
+        HStack(spacing: Design.spacingM) {
+            appIcon(for: notification)
+                .frame(width: 26, height: 26)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(notification.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
                 Text(subtitle(notification))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1)
-                Spacer(minLength: 0)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .padding(.horizontal, Design.spacingL)
         .shadow(color: .black.opacity(0.7), radius: 3, y: 1)
         .preferredColorScheme(.dark)
