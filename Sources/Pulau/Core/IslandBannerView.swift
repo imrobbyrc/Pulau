@@ -339,7 +339,7 @@ struct IslandBannerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding(.horizontal, Design.spacingL)
+        .padding(.horizontal, Design.spacingXL)
         .shadow(color: .black.opacity(0.7), radius: 3, y: 1)
         .preferredColorScheme(.dark)
     }
