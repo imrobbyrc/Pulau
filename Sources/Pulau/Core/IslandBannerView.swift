@@ -323,18 +323,21 @@ struct IslandBannerView: View {
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
         VStack(spacing: 4) {
-            Text(notification.app)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.white.opacity(0.6))
+            Text(notification.title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Design.spacingL)
             HStack(spacing: Design.spacingM) {
+                Spacer(minLength: 0)
                 appIcon(for: notification)
                     .frame(width: 26, height: 26)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
-                Text(bannerLine(notification))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
+                Text(subtitle(notification))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.8))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -344,14 +347,9 @@ struct IslandBannerView: View {
         .preferredColorScheme(.dark)
     }
 
-    /// Single-line content: title, body, or both joined.
-    private func bannerLine(_ notification: PulauNotification) -> String {
-        switch (notification.title.isEmpty, notification.body.isEmpty) {
-        case (false, false): return "\(notification.title) — \(notification.body)"
-        case (false, true): return notification.title
-        case (true, false): return notification.body
-        default: return ""
-        }
+    /// Subtitle line: the body, falling back to the app name when there is none.
+    private func subtitle(_ notification: PulauNotification) -> String {
+        notification.body.isEmpty ? notification.app : notification.body
     }
 
     private func appIcon(for notification: PulauNotification) -> some View {
