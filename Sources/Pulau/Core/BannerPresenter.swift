@@ -27,7 +27,11 @@ enum IslandState {
     case collapsed, minimal, full
 
     var width: CGFloat { self == .collapsed ? 185 : 360 }
-    var height: CGFloat { self == .full ? 174 : 32 }
+
+    /// Notification banners stay compact (40% of the usage height).
+    func height(notification: Bool) -> CGFloat {
+        self == .full ? (notification ? 70 : 174) : 32
+    }
 }
 
 struct QuotaAlert {

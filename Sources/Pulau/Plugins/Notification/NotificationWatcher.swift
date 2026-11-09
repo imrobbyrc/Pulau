@@ -213,7 +213,7 @@ final class NotificationWatcher: ObservableObject {
         guard let panel else { return }
         let frame = panel.frame
         let width = presenter.quotaAlert == nil ? presenter.state.width : IslandState.collapsed.width
-        let height = presenter.quotaAlert == nil ? presenter.state.height : IslandState.collapsed.height
+        let height = presenter.quotaAlert == nil ? presenter.state.height(notification: presenter.note != nil) : IslandState.collapsed.height(notification: false)
         let rect = NSRect(x: frame.midX - width / 2, y: frame.maxY - height,
                           width: width, height: height).insetBy(dx: -4, dy: -4)
         let point = NSEvent.mouseLocation

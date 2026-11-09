@@ -46,7 +46,7 @@ struct IslandBannerView: View {
         let expanded = presenter.state == .full
         VStack(spacing: 0) {
             // Keep the real notch line clear so the surface reads as growing out of it.
-            Color.clear.frame(height: presenter.note == nil ? 54 : 34)
+            Color.clear.frame(height: presenter.note == nil ? 54 : 30)
             if let note = presenter.note {
                 bannerContent(note)
                     .frame(width: islandWidth - 32, height: contentHeight)
@@ -57,7 +57,7 @@ struct IslandBannerView: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: presenter.state.width, height: presenter.state.height, alignment: .top)
+        .frame(width: presenter.state.width, height: presenter.state.height(notification: presenter.note != nil), alignment: .top)
         .overlay(alignment: .top) {
             Button(action: presenter.expandFromView) {
                 HStack(spacing: 0) {
@@ -322,13 +322,14 @@ struct IslandBannerView: View {
     }
 
     private func bannerContent(_ notification: PulauNotification) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: Design.spacingM) {
+            appIcon(for: notification)
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .shadow(color: .black.opacity(0.9), radius: 2, y: 1)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(notification.app)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)
                 if !notification.title.isEmpty {
@@ -341,14 +342,29 @@ struct IslandBannerView: View {
                     Text(notification.body)
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .shadow(color: .black.opacity(0.9), radius: 3, y: 1)
+        .padding(.horizontal, Design.spacingL)
+        .padding(.vertical, 4)
+        .shadow(color: .black.opacity(0.7), radius: 3, y: 1)
         .preferredColorScheme(.dark)
+    }
+
+    private func appIcon(for notification: PulauNotification) -> some View {
+        let image = NSWorkspace.shared.urlForApplication(withBundleIdentifier: notification.app)
+            .map { NSWorkspace.shared.icon(forFile: $0.path) }
+        return Group {
+            if let image {
+                Image(nsImage: image).resizable().scaledToFit()
+            } else {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+        }
     }
 }
 
