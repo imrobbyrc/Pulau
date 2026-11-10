@@ -25,73 +25,168 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     }
 }
 
-/// Dedicated settings window: dark chrome with a section sidebar; each pane is a glass
-/// card whose shape belongs to this caller (standard rounded corners, not notch styling).
+struct SettingsSectionHistory {
+    private(set) var sections: [SettingsSection] = [.island]
+    private(set) var index = 0
+
+    var current: SettingsSection { sections[index] }
+    var canGoBack: Bool { index > 0 }
+    var canGoForward: Bool { index + 1 < sections.count }
+
+    mutating func select(_ section: SettingsSection) {
+        guard section != current else { return }
+        sections = Array(sections.prefix(index + 1))
+        sections.append(section)
+        index += 1
+    }
+
+    mutating func goBack() {
+        if canGoBack { index -= 1 }
+    }
+
+    mutating func goForward() {
+        if canGoForward { index += 1 }
+    }
+}
+
+/// Dedicated settings window with searchable sidebar navigation and grouped detail panes.
 struct SettingsView: View {
     @ObservedObject var notifications: NotificationWatcher
     @ObservedObject var glm: GLMUsageStore
     @ObservedObject var codex: CodexUsageStore
     @ObservedObject var rex: RexAgentStore
     @ObservedObject var piPlugin: PiPluginManager
-    @State private var section: SettingsSection = .island
+    @State private var navigation = SettingsSectionHistory()
+    @State private var searchText = ""
     @State private var buddyEpoch = UUID()
+    private var section: SettingsSection { navigation.current }
+
+    private var filteredSections: [SettingsSection] {
+        guard !searchText.isEmpty else { return SettingsSection.allCases }
+        return SettingsSection.allCases.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: Design.spacingS) {
-                Text("PULAU SETTINGS")
-                    .font(.mono(10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.horizontal, Design.spacingL)
-                    .padding(.top, Design.spacingXL)
-                    .padding(.bottom, Design.spacingM)
-                ForEach(SettingsSection.allCases) { item in
-                    Button {
-                        section = item
-                    } label: {
-                        HStack(spacing: Design.spacingS) {
-                            Image(systemName: item.icon).frame(width: 16)
-                            Text(item.title)
-                            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 9) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.white.opacity(0.5))
+                    TextField("Search Settings", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.white.opacity(0.45))
                         }
-                        .font(.mono(12, weight: section == item ? .semibold : .regular))
-                        .foregroundStyle(section == item ? .white : .white.opacity(0.65))
-                        .padding(.horizontal, Design.spacingM)
-                        .padding(.vertical, 6)
-                        .background(section == item ? AnyShapeStyle(.white.opacity(0.14)) : AnyShapeStyle(.clear),
-                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, Design.spacingS)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .padding(.horizontal, 12)
+                .padding(.top, 28)
+
+                VStack(spacing: 4) {
+                    ForEach(filteredSections) { item in
+                        Button { select(item) } label: {
+                            HStack(spacing: 11) {
+                                Image(systemName: item.icon)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(section == item ? Color(red: 0.72, green: 0.86, blue: 0.74) : .white.opacity(0.7))
+                                    .frame(width: 27, height: 27)
+                                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title)
+                                        .font(.system(size: 13, weight: section == item ? .semibold : .regular))
+                                        .foregroundStyle(.white.opacity(section == item ? 0.96 : 0.75))
+                                    if section == item {
+                                        Text(sectionSubtitle(item))
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.5))
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(maxWidth: .infinity, minHeight: section == item ? 56 : 42, alignment: .leading)
+                            .background(section == item ? .white.opacity(0.075) : .clear,
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 12)
+                    }
                 }
                 Spacer(minLength: 0)
             }
-            .frame(width: 172)
-            Rectangle().fill(.white.opacity(Design.hairline)).frame(width: 1)
-            ScrollView {
-                selectedSection
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(Design.spacingL)
-                    .background {
-                        let shape = RoundedRectangle(cornerRadius: Design.cornerCard, style: .continuous)
-                        // Public glass keeps the card renderable offscreen; the private
-                        // variant belongs to the island only.
-                        if notifications.look != .solid, #available(macOS 26.0, *) {
-                            Color.clear.glassEffect(.regular.tint(.black.opacity(0.45)), in: shape)
-                        } else if notifications.look != .solid {
-                            IslandGlass().clipShape(shape)
+            .frame(width: 190)
+            Rectangle().fill(.white.opacity(0.06)).frame(width: 1)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 18) {
+                    HStack(spacing: 0) {
+                        Button(action: goBack) {
+                            Image(systemName: "chevron.left")
+                                .frame(width: 38, height: 36)
                         }
-                        shape.fill(.black.opacity(notifications.look == .solid ? 1 : 0.35))
-                        shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.8)
+                        .disabled(!navigation.canGoBack)
+                        Rectangle().fill(.white.opacity(0.08)).frame(width: 1, height: 24)
+                        Button(action: goForward) {
+                            Image(systemName: "chevron.right")
+                                .frame(width: 38, height: 36)
+                        }
+                        .disabled(!navigation.canGoForward)
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.72))
+                    .background(.white.opacity(0.075), in: Capsule())
+                    Text(section.title)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 25)
+                .padding(.bottom, 22)
+
+                ScrollView {
+                    if filteredSections.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                            .frame(maxWidth: .infinity, minHeight: 280)
+                    } else {
+                        selectedSection
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 24)
+                    }
+                }
             }
-            .padding(Design.spacingL)
         }
-        .frame(width: 660, height: 520)
-        .background(.black)
+        .frame(width: 760, height: 600)
+        .background(Color(red: 0.055, green: 0.075, blue: 0.064))
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
+    }
+
+    private func select(_ item: SettingsSection) { navigation.select(item) }
+    private func goBack() { navigation.goBack() }
+    private func goForward() { navigation.goForward() }
+
+    private func sectionSubtitle(_ item: SettingsSection) -> String {
+        switch item {
+        case .island:
+            switch notifications.look {
+            case .glassy: return "Glassy"
+            case .solid: return "Solid"
+            case .systemExperimental: return "System"
+            }
+        case .notifications: return notifications.isListening ? "Running" : "Off"
+        case .agents: return "GLM · Codex · Rex"
+        case .piSubagents: return piPlugin.busy ? "Updating" : (piPlugin.status?.enabled == true ? "Enabled" : "Not installed")
+        }
     }
 
     @ViewBuilder
@@ -105,19 +200,26 @@ struct SettingsView: View {
     }
 
     private func header(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.mono(10, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.6))
+        Text(title)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.84))
     }
 
     private var divider: some View {
-        Rectangle().fill(.white.opacity(Design.hairline)).frame(height: 1)
+        Color.clear.frame(height: 4)
     }
 
     private func group(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: Design.spacingS) {
+        VStack(alignment: .leading, spacing: Design.spacingM) {
             header(title)
             content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+            shape.fill(.white.opacity(0.045))
+            shape.strokeBorder(.white.opacity(0.055), lineWidth: 1)
         }
     }
 
