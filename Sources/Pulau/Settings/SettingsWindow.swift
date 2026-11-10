@@ -177,15 +177,16 @@ struct SettingsView: View {
                     }
                 }
             }
+            .background { detailPaneBackground }
         }
         .frame(width: 760, height: 600)
-        .background { windowBackground }
+        .background(Color(red: 0.055, green: 0.075, blue: 0.064))
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
-    private var windowBackground: some View {
+    private var detailPaneBackground: some View {
         switch notifications.look {
         case .solid:
             Color.black
@@ -250,8 +251,8 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-            shape.fill(.white.opacity(0.045))
-            shape.strokeBorder(.white.opacity(0.055), lineWidth: 1)
+            shape.fill(.black.opacity(0.16))
+            shape.strokeBorder(.white.opacity(0.04), lineWidth: 1)
         }
     }
 
