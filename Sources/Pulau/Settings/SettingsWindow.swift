@@ -17,10 +17,10 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .island: return "windshield.wave.and.drop"
+        case .island: return "island"
         case .notifications: return "bell"
-        case .agents: return "cpu"
-        case .piSubagents: return "puzzle.piece"
+        case .agents: return "robot"
+        case .piSubagents: return "puzzle-piece"
         }
     }
 }
@@ -46,6 +46,20 @@ struct SettingsSectionHistory {
 
     mutating func goForward() {
         if canGoForward { index += 1 }
+    }
+}
+
+private struct KoboyoSettingsIcon: View {
+    let name: String
+
+    var body: some View {
+        if let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "SettingsIcons"),
+           let image = NSImage(contentsOf: url) {
+            Image(nsImage: image).renderingMode(.template).resizable().scaledToFit()
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "circle").resizable().scaledToFit().accessibilityHidden(true)
+        }
     }
 }
 
@@ -93,8 +107,7 @@ struct SettingsView: View {
                     ForEach(filteredSections) { item in
                         Button { select(item) } label: {
                             HStack(spacing: 11) {
-                                Image(systemName: item.icon)
-                                    .font(.system(size: 16, weight: .medium))
+                                KoboyoSettingsIcon(name: item.icon)
                                     .foregroundStyle(section == item ? Color(red: 0.72, green: 0.86, blue: 0.74) : .white.opacity(0.7))
                                     .frame(width: 27, height: 27)
                                     .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -166,9 +179,28 @@ struct SettingsView: View {
             }
         }
         .frame(width: 760, height: 600)
-        .background(Color(red: 0.055, green: 0.075, blue: 0.064))
+        .background { windowBackground }
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder
+    private var windowBackground: some View {
+        switch notifications.look {
+        case .solid:
+            Color.black
+        case .glassy:
+            ZStack {
+                Color(red: 0.055, green: 0.075, blue: 0.064)
+                if #available(macOS 26.0, *) {
+                    Color.clear.glassEffect(.regular.tint(.black.opacity(0.42)), in: Rectangle())
+                } else {
+                    IslandGlass()
+                }
+            }
+        case .systemExperimental:
+            PrivateGlassBackdrop(rounded: true, dim: true)
+        }
     }
 
     private func select(_ item: SettingsSection) { navigation.select(item) }
