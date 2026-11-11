@@ -64,6 +64,7 @@ private struct SettingsWindowTransparency: NSViewRepresentable {
         window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
         if !window.styleMask.contains(.fullSizeContentView) {
             window.styleMask.insert(.fullSizeContentView)
         }
