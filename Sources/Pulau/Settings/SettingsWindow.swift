@@ -177,16 +177,15 @@ struct SettingsView: View {
                     }
                 }
             }
-            .background { detailPaneBackground }
         }
         .frame(width: 760, height: 600)
-        .background(Color(red: 0.055, green: 0.075, blue: 0.064))
+        .background { windowBackground }
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
-    private var detailPaneBackground: some View {
+    private var windowBackground: some View {
         switch notifications.look {
         case .solid:
             Color.black
