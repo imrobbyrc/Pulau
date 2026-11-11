@@ -36,7 +36,7 @@ struct PulauApp: App {
         Window("Pulau Settings", id: "pulau-settings") {
             SettingsView(notifications: notifications, glm: glm, codex: codex, rex: rex, piPlugin: piPlugin)
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(.titleBar)
         .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentSize)
     }
