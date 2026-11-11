@@ -190,13 +190,10 @@ struct SettingsView: View {
         case .solid:
             Color.black
         case .glassy:
-            ZStack {
-                Color(red: 0.055, green: 0.075, blue: 0.064)
-                if #available(macOS 26.0, *) {
-                    Color.clear.glassEffect(.regular.tint(.black.opacity(0.42)), in: Rectangle())
-                } else {
-                    IslandGlass()
-                }
+            if #available(macOS 26.0, *) {
+                Color.clear.glassEffect(.regular.tint(.black.opacity(0.42)), in: Rectangle())
+            } else {
+                IslandGlass()
             }
         case .systemExperimental:
             PrivateGlassBackdrop(rounded: true, dim: true)
