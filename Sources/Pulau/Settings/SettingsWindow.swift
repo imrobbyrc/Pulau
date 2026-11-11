@@ -49,6 +49,27 @@ struct SettingsSectionHistory {
     }
 }
 
+private struct SettingsWindowTransparency: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { configure(view.window) }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) { configure(view.window) }
+
+    private func configure(_ window: NSWindow?) {
+        guard let window else { return }
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        if !window.styleMask.contains(.fullSizeContentView) {
+            window.styleMask.insert(.fullSizeContentView)
+        }
+    }
+}
+
 private struct KoboyoSettingsIcon: View {
     let name: String
 
@@ -180,6 +201,7 @@ struct SettingsView: View {
         }
         .frame(width: 760, height: 600)
         .background { windowBackground }
+        .background { SettingsWindowTransparency().allowsHitTesting(false).accessibilityHidden(true) }
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
     }
