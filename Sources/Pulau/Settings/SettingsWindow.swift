@@ -178,27 +178,18 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                HStack(spacing: 16) {
-                    HStack(spacing: 0) {
-                        Button(action: goBack) {
-                            Image(systemName: "chevron.left").frame(width: 34, height: 30)
-                        }
-                        .disabled(!navigation.canGoBack)
-                        .accessibilityLabel("Back")
-                        Rectangle().fill(.white.opacity(0.08)).frame(width: 1, height: 20)
-                        Button(action: goForward) {
-                            Image(systemName: "chevron.right").frame(width: 34, height: 30)
-                        }
-                        .disabled(!navigation.canGoForward)
-                        .accessibilityLabel("Forward")
-                    }
-                    .buttonStyle(.plain)
-                    .background(.white.opacity(0.075), in: Capsule())
-                    Text(section.title)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                }
+            ToolbarItemGroup(placement: .navigation) {
+                Button(action: goBack) { Image(systemName: "chevron.left") }
+                    .disabled(!navigation.canGoBack)
+                    .accessibilityLabel("Back")
+                Button(action: goForward) { Image(systemName: "chevron.right") }
+                    .disabled(!navigation.canGoForward)
+                    .accessibilityLabel("Forward")
+            }
+            ToolbarItem(placement: .principal) {
+                Text(section.title)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
             }
         }
     }
