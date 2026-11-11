@@ -159,43 +159,16 @@ struct SettingsView: View {
             }
             .frame(width: 190)
             Rectangle().fill(.white.opacity(0.06)).frame(width: 1)
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 18) {
-                    HStack(spacing: 0) {
-                        Button(action: goBack) {
-                            Image(systemName: "chevron.left")
-                                .frame(width: 38, height: 36)
-                        }
-                        .disabled(!navigation.canGoBack)
-                        Rectangle().fill(.white.opacity(0.08)).frame(width: 1, height: 24)
-                        Button(action: goForward) {
-                            Image(systemName: "chevron.right")
-                                .frame(width: 38, height: 36)
-                        }
-                        .disabled(!navigation.canGoForward)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .background(.white.opacity(0.075), in: Capsule())
-                    Text(section.title)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.92))
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 25)
-                .padding(.bottom, 22)
-
-                ScrollView {
-                    if filteredSections.isEmpty {
-                        ContentUnavailableView.search(text: searchText)
-                            .frame(maxWidth: .infinity, minHeight: 280)
-                    } else {
-                        selectedSection
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, 24)
-                    }
+            ScrollView {
+                if filteredSections.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                } else {
+                    selectedSection
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
+                        .padding(.bottom, 24)
                 }
             }
         }
@@ -204,6 +177,30 @@ struct SettingsView: View {
         .background { SettingsWindowTransparency().allowsHitTesting(false).accessibilityHidden(true) }
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                HStack(spacing: 16) {
+                    HStack(spacing: 0) {
+                        Button(action: goBack) {
+                            Image(systemName: "chevron.left").frame(width: 34, height: 30)
+                        }
+                        .disabled(!navigation.canGoBack)
+                        .accessibilityLabel("Back")
+                        Rectangle().fill(.white.opacity(0.08)).frame(width: 1, height: 20)
+                        Button(action: goForward) {
+                            Image(systemName: "chevron.right").frame(width: 34, height: 30)
+                        }
+                        .disabled(!navigation.canGoForward)
+                        .accessibilityLabel("Forward")
+                    }
+                    .buttonStyle(.plain)
+                    .background(.white.opacity(0.075), in: Capsule())
+                    Text(section.title)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+            }
+        }
     }
 
     @ViewBuilder
