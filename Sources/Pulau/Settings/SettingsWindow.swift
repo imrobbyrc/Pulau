@@ -189,14 +189,13 @@ struct SettingsView: View {
         switch notifications.look {
         case .solid:
             Color.black
-        case .glassy:
+        case .glassy, .systemExperimental:
+            // Private variant 11 is shaped for the island; settings use public full-window glass.
             if #available(macOS 26.0, *) {
                 Color.clear.glassEffect(.regular.tint(.black.opacity(0.42)), in: Rectangle())
             } else {
                 IslandGlass()
             }
-        case .systemExperimental:
-            PrivateGlassBackdrop(rounded: true, dim: true)
         }
     }
 
